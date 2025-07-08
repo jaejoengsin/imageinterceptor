@@ -13,16 +13,11 @@
     "matches": ["<all_urls>"],
     "css": ["my-styles.css"],
     "js": [
-      "/src/js/content_scripts.js"
+      "/src/js/utils/image_extract", "/src/js/content_scripts.js"
     ],
     "run_at": "document_idle",
     "all_frames": true,
     "match_about_blank": false
-    }],
-
-    "web_accessible_resources": [{
-    "resources": ["/src/js/utils/image_extract.js"],
-    "matches": ["<all_urls>"]
     }]
 
 }
