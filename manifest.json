@@ -20,7 +20,8 @@
     }],
 
     "background": {
-    "service_worker": "src/js/background.js"
+    "service_worker": "src/js/background.js",
+    "type": "module"
   },
 
   "host_permissions": [
@@ -29,11 +30,14 @@
 
   "web_accessible_resources": [
   {
-    "resources": ["src/js/injectedContent.js","src/js/iframe_injectedContent.js", "src/css/test.css", "src/css/masking.css", "images/icons/*.png"],
+    "resources": ["src/js/injectedContent.js","src/js/iframe_injectedContent.js", 
+                  "src/css/test.css", "src/css/masking.css", 
+                  "images/icons/*.png", "src/js/utils/nomarlize-url-main"
+                  ],
     "matches": ["<all_urls>"]
   }
 ],
-"permissions": ["webRequest"]
+"permissions": ["webRequest", "storage"]
 
 }
 
