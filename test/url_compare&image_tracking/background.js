@@ -2,6 +2,9 @@ import * as URLJs from './utils/normalize-url-main/index.js'
 
 
 const batchMap = new Map();
+const eventTimer = new Map();
+const BATCH_LIMIT = 10;
+const IDLE = 500;
 
 
 
@@ -28,34 +31,23 @@ async function canonicalizeImageUrl(rawUrl) {
   });
 }
 
-async function storeImage(tabId, url) {
-  if(!batchMap.has(tabId)) {
-    batchMap.set(tabId,[]);
-  }
-  const batch = batchMap.get(tabId);
-  batch.push(
-    {
-    domain: (new URL(url)).hostname.replace(/^www\./, '') ,//수정예정,
-    tabId,
-    canonicalUrlPromise: canonicalizeImageUrl(url),
-    url,
-    harmful: false,   // 기본값
-    checked: false,   // 검사완료
-    }
-  );
 
-  // if (storeImageBatch.length >= BATCH_LIMIT) {
-  //   await saveBatchToIndexDB(storeImageBatch.splice(0, BATCH_LIMIT));
-  // }
+async function confirmFlush(batch) {
+ if (batch.size >= BATCH_LIMIT) {
+    await flushBatch(tabId);
+  }
+  clearTimeout(idleT); //flushBatch 
+  idleT = setTimeout(flushBatch, IDLE);
 }
 
 
-async function flushBatch() {
+
+async function flushBatch(tabId) {
   const batch = batchMap.get(tabId);
   if(!batch || batch.length === 0 ) return;
   // 모든 canonicalUrlPromise가 끝나기를 기다림
   const resolvedBatch = await Promise.all(
-    storeImageBatch.map(async (item) => {
+    batch.map(async (item) => {
       let canonicalUrl;
       try {
         canonicalUrl = await item.canonicalUrlPromise;
@@ -64,21 +56,63 @@ async function flushBatch() {
         canonicalUrl = item.url; //일단은 고유 url 넣고 push
       }
       return {
-        domain: item.domain,
-        tabId: item.tabId,
-        data: {
-          canonicalUrl,
-          url: item.url,
-          harmful: item.harmful,
-          checked: item.checked,
-        }
+        canonicalUrl: canonicalUrl,   // 정규화 url, 인덱스/PK
+        url: item.url,            // 원본 url
+        domain: item.domain,         // (선택)
+        harmful: item.harmful,
+        checked: item.checked
       };
     })
   );
   await saveBatchToIndexDB(resolvedBatch);
-  storeImageBatch.length = 0;
+  batchMap.set(tabId, []); // flush 후 비움
 }
 
+
+
+async function storeImage(tabId, url) {
+  if(!batchMap.has(tabId)) {
+    batchMap.set(tabId,[]);
+
+  }
+  const batch = batchMap.get(tabId);
+  batch.push(
+    {
+    canonicalUrlPromise: canonicalizeImageUrl(url),
+    domain: (new URL(url)).hostname.replace(/^www\./, '') ,//수정예정,
+    url,
+    harmful: false,   // 기본값
+    checked: false,   // 검사완료
+    }
+  );
+  
+  if (batch.length >= BATCH_LIMIT) {
+    await flushBatch(tabId);
+  }
+
+  if(!eventTimer.has(tabId)){
+    eventTimer.set(tabId, setTimeout( async () => {
+      try {
+        await flushBatch(tabId);
+
+      } catch(e) {
+        console.error(e);
+      }
+    }), IDLE);
+      
+  }
+  else{
+    clearTimeout(eventTimer.get(tabId));
+     eventTimer.set(tabId, setTimeout( async () => {
+      try {
+        await flushBatch(tabId);
+
+      } catch(e) {
+        console.error(e);
+      }
+    }), IDLE);
+  }
+}
 
 
 
