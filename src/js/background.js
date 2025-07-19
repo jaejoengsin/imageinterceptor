@@ -1,3 +1,15 @@
+
+
+
+
+
+
+
+
+
+
+
+
 // 크롬 확장 프로그램 manifest에 "webRequest", "webRequestBlocking", "<all_urls>" 권한 필요
 
 const successSet = new Set();

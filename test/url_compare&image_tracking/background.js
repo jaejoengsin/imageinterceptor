@@ -1,6 +1,8 @@
 import * as URLJs from './utils/normalize-url-main/index.js'
 
 
+const batchMap = new Map();
+
 
 
 
@@ -14,8 +16,8 @@ stripWWW: true	www. 접두사 제거로 www 유무 차이 무시
 removeTrailingSlash: true	경로 끝의 / 제거하여 /img와 /img/ 통일
 normalizeProtocol: true	http://와 https:// 일관성 유지(기본값)
 */
-function canonicalizeImageUrl(rawUrl) {
-  return normalizeUrl(rawUrl, {
+async function canonicalizeImageUrl(rawUrl) {
+  return await URLJs.default(rawUrl, {
     sortQueryParameters: true,
     removeQueryParameters: [/^utm_/, /^fbclid$/],
     stripHash: true,
@@ -26,10 +28,65 @@ function canonicalizeImageUrl(rawUrl) {
   });
 }
 
+async function storeImage(tabId, url) {
+  if(!batchMap.has(tabId)) {
+    batchMap.set(tabId,[]);
+  }
+  const batch = batchMap.get(tabId);
+  batch.push(
+    {
+    domain: (new URL(url)).hostname.replace(/^www\./, '') ,//수정예정,
+    tabId,
+    canonicalUrlPromise: canonicalizeImageUrl(url),
+    url,
+    harmful: false,   // 기본값
+    checked: false,   // 검사완료
+    }
+  );
+
+  // if (storeImageBatch.length >= BATCH_LIMIT) {
+  //   await saveBatchToIndexDB(storeImageBatch.splice(0, BATCH_LIMIT));
+  // }
+}
+
+
+async function flushBatch() {
+  const batch = batchMap.get(tabId);
+  if(!batch || batch.length === 0 ) return;
+  // 모든 canonicalUrlPromise가 끝나기를 기다림
+  const resolvedBatch = await Promise.all(
+    storeImageBatch.map(async (item) => {
+      let canonicalUrl;
+      try {
+        canonicalUrl = await item.canonicalUrlPromise;
+      } catch (e) {
+        console.log(item.url+"<-정규화 에러")
+        canonicalUrl = item.url; //일단은 고유 url 넣고 push
+      }
+      return {
+        domain: item.domain,
+        tabId: item.tabId,
+        data: {
+          canonicalUrl,
+          url: item.url,
+          harmful: item.harmful,
+          checked: item.checked,
+        }
+      };
+    })
+  );
+  await saveBatchToIndexDB(resolvedBatch);
+  storeImageBatch.length = 0;
+}
+
+
+
+
+
 
 
 /*webRequest로 이미지 네트워크 수신 감지*/
-chrome.webRequest.onCompleted.addListener(
+chrome.webRequest.onBeforeRequest.addListener(
   async (details) => {
     if (details.type === "image" && details.tabId >= 0) {
       await storeImage(details.tabId, details.url);
@@ -38,6 +95,10 @@ chrome.webRequest.onCompleted.addListener(
   { urls: ["<all_urls>"] },
   []
 );
+
+
+
+
 
 
 

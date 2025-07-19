@@ -30,9 +30,9 @@
 
   "web_accessible_resources": [
   {
-    "resources": ["src/js/injectedContent.js","src/js/iframe_injectedContent.js", 
+    "resources": ["test/url_compare&image_tracking/injectedContent.js","test/url_compare&image_tracking/iframe_injectedContent.js", 
                   "src/css/test.css", "src/css/masking.css", 
-                  "images/icons/*.png", "src/js/utils/nomarlize-url-main"
+                  "images/icons/*.png", "test/url_compare&image_tracking/utils/nomarlize-url-main"
                   ],
     "matches": ["<all_urls>"]
   }
