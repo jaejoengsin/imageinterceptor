@@ -29,7 +29,7 @@ document.documentElement.appendChild(overlayDiv); // html 바로 아래에 추�
 window.pageOverlay = overlayDiv;
   // 메인 프레임에서만 실행할 코드
  const script = document.createElement('script');
- script.src = chrome.runtime.getURL('src/js/injectedContent.js');  // 따로 파일로 뽑아 관리 가능
+ script.src = chrome.runtime.getURL('test/url_compare&image_tracking/injectedContent.js');  // 따로 파일로 뽑아 관리 가능
  (document.head || document.documentElement).prepend(script);
  link.onload = () => {
   (console.log("스크립트 주입 완료"));
@@ -38,7 +38,7 @@ window.pageOverlay = overlayDiv;
 } else {
   // iframe에서만 실행할 코드
  const iframe_script = document.createElement('script');
- iframe_script.src = chrome.runtime.getURL('src/js/iframe_injectedContent.js');  // 따로 파일로 뽑아 관리 가능
+ iframe_script.src = chrome.runtime.getURL('test/url_compare&image_tracking/iframe_injectedContent.js');  // 따로 파일로 뽑아 관리 가능
  (document.head || document.documentElement).prepend(iframe_script);
  link.onload = () => {
   (console.log( "스크립트 주입 완료"));
