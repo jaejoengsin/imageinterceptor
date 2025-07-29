@@ -3,8 +3,8 @@ import * as URLJs from './utils/normalize-url-main/index.js'
 
 const batchMap = new Map();
 const eventTimer = new Map();
-const BATCH_LIMIT = 16;
-const IDLE = 5000;
+const BATCH_LIMIT = 1;
+const IDLE = 5;
 
 let DB = null;
 let keySet = null;
@@ -65,6 +65,7 @@ async function loadKeySet() {
   const existingKeys = await getAllKeysPromise(store);
   // 이미 존재하는지 Set으로 관리(검색 빠름)
   keySet = new Set(existingKeys);
+  console.log(keySet.size);
   keySetLoaded = true;
 } 
 
@@ -85,6 +86,15 @@ let PromiseForInit = (async () => {
   }
   return true;
 })(); 
+
+
+
+//이미지 url fetch
+
+
+
+
+
 
 
 async function DBCheckAndAdd(batch) {
@@ -123,16 +133,93 @@ stripWWW: true	www. 접두사 제거로 www 유무 차이 무시
 removeTrailingSlash: true	경로 끝의 / 제거하여 /img와 /img/ 통일
 normalizeProtocol: true	http://와 https:// 일관성 유지(기본값)
 */
+function isLikelyQueryString(url) {
+  // path에만 '='이 있고, '?'가 없음
+  const u = new URL(url);
+  return !!u.search;
+}
 async function canonicalizeImageUrl(rawUrl) {
-  return await URLJs.default(rawUrl, {
-    sortQueryParameters: true,
-    removeQueryParameters: [/^utm_/, /^fbclid$/],
-    stripHash: true,
-    stripTextFragment: true,
-    stripWWW: true,
-    removeTrailingSlash: true,
-    normalizeProtocol: true,
-  });
+  if (isLikelyQueryString(rawUrl)) {
+    return await URLJs.default(rawUrl, {
+      sortQueryParameters: true,
+      removeQueryParameters: [/^utm_/, /^fbclid$/],
+      stripHash: true,
+      stripTextFragment: true,
+      stripWWW: true,
+      removeTrailingSlash: true,
+      normalizeProtocol: true,
+    });
+  } else {
+    // 오타 수정: defaultl → default, url → rawUrl
+    return await URLJs.default(rawUrl, {
+      stripWWW: true,
+      removeTrailingSlash: true,
+      normalizeProtocol: true,
+    });
+  }
+}
+
+
+const eventListner = [];
+const waiting = [];
+
+const URlReloadTest = false;
+if(URlReloadTest){
+  setInterval(() => {
+    console.log("재탐색합니다");
+    waiting.forEach((item)=>{
+      if(keySet.has(item)){
+        console.log("재탐색 성공!: " +item);
+      }
+      else{
+      console.log("재탐색하였으나 실패:"+ item);
+      }
+      if(eventListner.includes(item)){
+        console.log("and 네트워크 감지 기록 있음: " + item );
+      }
+      else{
+        console.log("and 네트워크 감지 기록 없음:" +item);
+      }
+    })
+    
+  }, 2000);
+}
+
+async function onlyCheck(batch) {
+  if (!keySetLoaded) await loadKeySet(DB);
+  if(!DB){
+    console.error("error from DBCheckAndAdd:DB가 준비되지 않았음.");
+    return;
+  }
+  const resolvedBatch = await Promise.all(
+    batch.map(async (item) => {
+      try {
+        // console.log(item.url);
+        //canonicalUrl = await canonicalizeImageUrl(item.url); 정규화 과정에서 지속적인 오류 발생으로 일단 제외
+        // console.log("정규화url" + canonicalUrl);
+        if(keySet.has(item.url)){
+          console.log("일치하는 url있음");
+          return item;
+        }
+        else{
+          const cachCheck = await caches.match(item.url);
+          if(cachCheck){
+            console.log("cach 확인 결과, 일치하는 url있음");
+          }
+          else{
+              console.log("못찾음: " + item.url);
+              waiting.push(item.url);
+            }
+          
+        }
+      } catch (e) {
+        console.log(item.url+" <-이미지 비교중 에러");
+      }
+    }).filter(item => item !== undefined)
+  );
+  console.log(batch);
+  console.log(resolvedBatch);
+  return resolvedBatch;
 }
 
 
@@ -145,15 +232,15 @@ async function flushBatch(tabId) {
   const resolvedBatch = await Promise.all(
     batch.map(async (item) => {
       let canonicalUrl;
-      try {
-        canonicalUrl = await item.canonicalUrlPromise;
-      } catch (e) {
-        console.log(item.url+"<-정규화 에러");
-        errorCount++;
-        canonicalUrl = item.url; //일단은 고유 url 넣고 push
-      }
+      // try {
+      //   canonicalUrl = await item.canonicalUrlPromise;
+      // } catch (e) {
+      //   console.log(item.url+"<-정규화 에러");
+      //   errorCount++;
+      //   canonicalUrl = item.url; //일단은 고유 url 넣고 push
+      // }
       return {
-        canonicalUrl: canonicalUrl,   // 정규화 url, 인덱스/PK
+        canonicalUrl: item.url,   // 정규화 url, 인덱스/PK
         url: item.url,            // 원본 url
         domain: item.domain,         // (선택)
         harmful: item.harmful,
@@ -177,7 +264,7 @@ async function storeImage(tabId, url) {
     {
     canonicalUrlPromise: canonicalizeImageUrl(url),
     domain: (new URL(url)).hostname.replace(/^www\./, '') ,//수정예정,
-    url,
+    url: url,
     harmful: false,   // 기본값
     checked: false,   // 검사완료
     }
@@ -216,13 +303,13 @@ async function storeImage(tabId, url) {
 
 
 
-
-
 /*webRequest로 이미지 네트워크 수신 감지*/
 chrome.webRequest.onBeforeRequest.addListener(
   async (details) => {
     if (details.type === "image" && details.tabId >= 0) {
+      eventListner.push(details.url);
       await storeImage(details.tabId, details.url);
+
     }
   },
   { urls: ["<all_urls>"] },
@@ -232,17 +319,50 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 
 
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const batchFromPage = message.data;
+  console.log(batchFromPage);
+  console.log("서비스 워커 수신 data: " + batchFromPage.length);
+  // sendResponse({
+  //       type: "response",
+  //       data: batchFromPage, // 20개만 보내고, 배열은 자동으로 비움
+  //     });
+  if (message?.type === "imgDataFromPage") {
+     onlyCheck(message.data).then(batchFromPage => {
+      sendResponse({
+        type: "response",
+        data: batchFromPage, // 20개만 보내고, 배열은 자동으로 비움
+      });
+    });
+    return true;
+  }
+});
 
 
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === "imgDataFromContentScript") {
+     onlyCheck(message.data).then(batchFromPage => {
+      sendResponse({
+        type: "response",
+        data: batchFromPage, 
+      });
+    });
+   
+    return true;
+  }
+});
+
+// setInterval(
+//   () =>{
+//     chrome.runtime.sendMessage({
+//       type: "waitingData",
+//       data: waiting, // 20개만 보내고, 배열은 자동으로 비움
+//     });
+//     waiting.splice(0, waiting.length); 
+//       }, 500);
 
 
-
-
-
-
-
-
-
+      
 // // 크롬 확장 프로그램 manifest에 "webRequest", "webRequestBlocking", "<all_urls>" 권한 필요
 
 // const successSet = new Set();

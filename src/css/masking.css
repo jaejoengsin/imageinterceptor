@@ -40,8 +40,8 @@
       opacity: 0 !important; /* !important를 사용하여 다른 스타일보다 우선하도록 */
   }
 
-
+/* 
 div[style*="background-image"],
 span[style*="background-image"] {
   background-image: none !important;
-}
+} */

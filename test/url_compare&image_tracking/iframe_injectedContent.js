@@ -81,39 +81,6 @@ function maskAndSend (img, type) {
 }
 
 
-const imgObserver = new MutationObserver(mutations => {
-   mutations.forEach((mutation) => {
-    if (mutation.type === "childList") {
-      mutation.addedNodes.forEach((node) => {
-        if (node.nodeType === 1 && node.tagName === 'IMG'){
-          maskAndSend(node,"dynamicIMG");
-          console.log("mutate!");
-        }
-        if (node.nodeType === 1 && node.querySelectorAll) {
-          node.querySelectorAll('img').forEach(img => maskAndSend(img,"dynamicIMG"));
-      }
-      });
-    }
-  });
-});
-
-
-function Collect_staticImg () {
-  const staticImgs = document.querySelectorAll('img');
-  console.log("정적파일 합" + staticImgs.length);
-
-  staticImgs.forEach(img => {
-    const currentImg = img; // 'this' 컨텍스트 문제 해결을 위한 캡처
-    maskAndSend(img,"staticIMG");
-    
-  })
-
-}
-
-
-
-
-
 const imgSrcObject = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
 if (!imgSrcObject || !imgSrcObject.set)
   console.log(imgSrcObject+"src 속성을 불러오지 못했습니다");
@@ -136,40 +103,9 @@ Object.defineProperty(HTMLImageElement.prototype, 'src', {
   }
 });
 
-
-//초기화 함수
-function pageInit() {
-
-  // if(DOMLoadComplete) return;
-  // DOMLoadComplete = true
-    
-    // ... static 이미지 처리 로직 ...
-  Collect_staticImg();
-  if(document.readyState=="interactive"){
-    imgObserver.observe(document.body, {
-    childList: true, //자식
-    subtree: true, //자손
-    attributes: false
-    });
- }
-
-
-}
-//document.addEventListener('DOMContentLoaded', pageInit());
-
-if(document.readyState === 'loading'){
-  document.addEventListener('DOMContentLoaded', pageInit);
-}
-else {
-  pageInit();
-}
-
-
-
 //다른 탭을 사용중일때, 15초마다 확인.
 setInterval(() => { if (dataBuffer.length) Flush(); }, 15000);
 //페이지가 감추어졌을때
-
 
 addEventListener('pagehide', Flush());
 
