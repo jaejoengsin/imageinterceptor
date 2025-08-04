@@ -1,7 +1,7 @@
 
   
 const dataBuffer = [];
-const MAX_N = 100, IDLE = 500;
+const MAX_N = 16, IDLE = 50;
 let idleT = null
 let testcnt = 0;
 
@@ -74,10 +74,10 @@ function maskAndSend (img, type) {
   //if (img.dataset.imgId && img.dataset.url === img.src) return;
   if (img.classList.contains('imgMasking')) return; //masking 상태에서 같은 객체의 src가 또 바뀔 수도 있는데 이 경우에는 무시될 수 밖에 없음. 이 경우에 대해 큰 문제가 발생하면 코드 수정 검토
   const url = img.currentSrc || img.src;
+  if (!url || url === '') return;          // 빈 URL 걸러냄
   if(img.currentSrc!=img.src){
     console.log("currentSrc: " +img.currentSrc +  "src: "+ img.src);
   }
-  if (!url || url === '') return;          // 빈 URL 걸러냄
   absUrl = toAbsoluteUrl(url, baseURI = document.baseURI );
   img.classList.add("imgMasking", type); //일단은 static 이미지는 static이라고 클래스에 명시. 현재는 클래스 사용. 나중에 필요하면 새로운 속성을 추가하는 식으로 바꿀수도
   const uuid = crypto.randomUUID();

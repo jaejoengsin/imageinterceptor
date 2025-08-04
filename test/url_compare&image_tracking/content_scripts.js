@@ -1,11 +1,11 @@
 
+//const batchPort = chrome.runtime.connect({ name: 'batch' });
+// const DOMLoadComplete = false;
+// let loadingImg = chrome.runtime.getURL("src/css/masking.css")
 let testcnt = 0;
 const dataBuffer = [];
-const MAX_N = 100, IDLE = 500;
-// const DOMLoadComplete = false;
+const MAX_N = 16, IDLE = 50;
 let idleT = null
-// let loadingImg = chrome.runtime.getURL("src/css/masking.css")
-//const batchPort = chrome.runtime.connect({ name: 'batch' });
 
 
 const link = document.createElement('link');
@@ -75,6 +75,7 @@ function maybeFlush() {
 let ALLremoveFalse = 0;
 let ALLremoveTrue = 0;
 function Flush() {
+  
   if (!dataBuffer.length) return;
   const batchFromContentScript = dataBuffer.splice(0, dataBuffer.length).filter(item => document.querySelector(`img[data-img-id="${item.id}"]`)); // 0부터 dataBuffer.length번째 인덱스(전체)를 복사한 객체 반환 & 해당 크기만큼 기존 객체 내 원소 삭제 -> 0으로 초기화
    chrome.runtime.sendMessage({
@@ -179,7 +180,7 @@ const imgObserver = new MutationObserver(mutations => {
         // <img>가 들어온 경우
         if (!node.dataset.imgID) {       
           const hasSrcSet = !!node.getAttribute('srcset');
-          console.log("mutateobserver detected |  " + "url: "+ node.src);  
+          //console.log("mutateobserver detected |  " + "url: "+ node.src);  
            checkCurrentSrc(node, htmlImgElement => {
               maskAndSend(htmlImgElement, 'dynamicIMG');
             } );       
@@ -202,7 +203,7 @@ const imgObserver = new MutationObserver(mutations => {
         node.querySelectorAll('img').forEach(img => {
           
           if (!img.dataset.imgID) {
-            console.log("mutateobserver detected |  " + "url: "+ img.src);
+            //console.log("mutateobserver detected |  " + "url: "+ img.src);
             checkCurrentSrc(img, htmlImgElement => {
                 //console.log("currentSrc used: "+ htmlImgElement.currentSrc);
                 maskAndSend(htmlImgElement, 'dynamicIMG');
@@ -288,19 +289,19 @@ else {
 
 
 
-
 window.addEventListener('message', (event) => {
   //if (event.source !== window) return;
   if (event.origin !== window.origin) return; // 보안: 출처 필터링
   if (event.data?.source !== 'page-script') return; // 보안: 출처 확인
   if (event.data?.type === 'imgDataFromPage') {
-    console.log("이미지 받았음: " + event.data.data);
+    console.log("page로부터 이미지 받음 " + event.data.data);
     const batchFromPage = event.data.data;
     chrome.runtime.sendMessage({
       type: "imgDataFromPage",
       data: batchFromPage, // 20개만 보내고, 배열은 자동으로 비움
     },   
     function(response) {
+     
       let removeFalse = 0;
       let removeTrue = 0;
       const responseBatch = response.data; // 배열 [{ id, url, ... }, ...]

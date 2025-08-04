@@ -36,7 +36,7 @@
     "matches": ["<all_urls>"]
   }
 ],
-"permissions": ["webRequest", "storage","webRequestBlocking"]
+"permissions": ["webRequest", "storage"]
 
 }
 

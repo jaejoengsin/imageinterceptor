@@ -1,17 +1,25 @@
 import * as URLJs from './utils/normalize-url-main/index.js'
 
 
-const batchMap = new Map();
-const eventTimer = new Map();
-const BATCH_LIMIT = 1;
-const IDLE = 5;
+// const batchMap = new Map();
+// const eventTimer = new Map();
+// const IDLE = 10000;
 
+const batchForDB = [];
+const batchForFetch = [];
+const BATCH_LIMIT = 16;
+const BATCH_LIMIT_FOR_FETCH = 16;
+const IDLEForDB = 20;
+const IDLEFORFETCH = 100;
+
+let idleTForDB = null;
+let idleTForFetch = null;
+let currentTab = null;
 let DB = null;
 let keySet = null;
 let keySetLoaded = false;
-const fetchURL = [];
-
-
+let flushPromise = null;
+let fetchPromise = null;
 
 
 /*
@@ -22,6 +30,8 @@ reject(reason)
 : 작업이 실패했을 때 Promise의 상태를 '거부(rejected)' 상태로 전환시키고, 에러(이유)를 reason으로 전달합니다.
 해당 값은 .catch() 또는 .then(, ) 두 번째 콜백, 비동기적으로 실행
 */
+
+
 function openImageUrlDB() {
   return new Promise((resolve, reject) => {
     //imageUrlDB는 db이름. 만약 존재하지 않으면 생성, 존재하면 해당 db를 열음 
@@ -103,25 +113,50 @@ async function DBCheckAndAdd(batch) {
     console.error("error from DBCheckAndAdd:DB가 준비되지 않았음.");
     return;
   }
-    const tx = DB.transaction('imgURL', 'readwrite');
-    const store = tx.objectStore('imgURL');
-  
-  const toFetch = [];
 
+  const tx = DB.transaction('imgURL', 'readwrite');
+  const store = tx.objectStore('imgURL');
   
+  const laterToFetch = [];
+  const firstToFetch = [];
+
   for (const item of batch) {
-    if (!keySet.has(item.canonicalUrl)) {
-      toFetch.push([item.canonicalUrl, item.url, item.harmful]); // fetch 대상(아직 없음)
-      store.put(item);     // DB에 저장(필요시)
+    if (!keySet.has(item.canonicalUrl)) { // fetch 대상(아직 없음)
+      if(currentTab == item.tabId){
+        firstToFetch.push(	{
+          canonicalUrl:item.canonicalUrl,
+          url:item.url,
+          status: false,
+          harmful:false});
+          //console.log("firsttofetch!"+firstToFetch.length);
+        }
+      else{
+        laterToFetch.push(	{
+          canonicalUrl:item.canonicalUrl,
+          url:item.url,
+          status: false,
+          harmful:false}); 
+          //console.log("latertofetch!"+laterToFetch.length);
+        }
+      store.put({
+        canonicalUrl:item.canonicalUrl,
+        url: item.url,
+        domain: (new URL(item.url)).hostname.replace(/^www\./, '') ,//수정예정,
+        harmful: false,   // 기본값
+        status: false,   // 검사완료
+      });     // DB에 저장
       keySet.add(item.canonicalUrl); // 중복 방지
     }
     // 이미 있으면 아무것도 안 함(무시)
   }
   await tx.done?.(); // 일부 브라우저에선 필요 없음
-  console.log("fetchdata:"+toFetch.length);
-  return toFetch;        // fetch 대상으로 쓸 수 있음
+  
+  firstToFetch.unshift(...laterToFetch);
+  //console.log("batch size:", batch.length);
+  //console.log("fetchdata:"+firstToFetch.length);
+  return firstToFetch;        
 }
-//요청 주소, 나중에 다시 찾을 키값
+
 
 
 /*
@@ -135,8 +170,8 @@ normalizeProtocol: true	http://와 https:// 일관성 유지(기본값)
 */
 function isLikelyQueryString(url) {
   // path에만 '='이 있고, '?'가 없음
-  const u = new URL(url);
-  return !!u.search;
+  const result = new URL(url);
+  return !!result.search;
 }
 async function canonicalizeImageUrl(rawUrl) {
   if (isLikelyQueryString(rawUrl)) {
@@ -198,136 +233,180 @@ async function onlyCheck(batch) {
         //canonicalUrl = await canonicalizeImageUrl(item.url); 정규화 과정에서 지속적인 오류 발생으로 일단 제외
         // console.log("정규화url" + canonicalUrl);
         if(keySet.has(item.url)){
-          console.log("일치하는 url있음");
+          //console.log("일치하는 url있음");
           return item;
         }
         else{
           const cachCheck = await caches.match(item.url);
           if(cachCheck){
-            console.log("cach 확인 결과, 일치하는 url있음");
+            //console.log("cach 확인 결과, 일치하는 url있음");
           }
           else{
-              console.log("못찾음: " + item.url);
+              //console.log("못찾음: " + item.url);
               waiting.push(item.url);
             }
           
         }
       } catch (e) {
-        console.log(item.url+" <-이미지 비교중 에러");
+        //console.log(item.url+" <-이미지 비교중 에러");
       }
     }).filter(item => item !== undefined)
   );
-  console.log(batch);
-  console.log(resolvedBatch);
+  //console.log(batch);
+  //console.log(resolvedBatch);
   return resolvedBatch;
 }
 
 
-async function flushBatch(tabId) {
-  const batch = batchMap.get(tabId);
-  if(!batch || batch.length === 0 ) return;
-  // 모든 canonicalUrlPromise가 끝나기를 기다림
-
-  const errorCount = 0;
-  const resolvedBatch = await Promise.all(
-    batch.map(async (item) => {
-      let canonicalUrl;
-      // try {
-      //   canonicalUrl = await item.canonicalUrlPromise;
-      // } catch (e) {
-      //   console.log(item.url+"<-정규화 에러");
-      //   errorCount++;
-      //   canonicalUrl = item.url; //일단은 고유 url 넣고 push
-      // }
-      return {
-        canonicalUrl: item.url,   // 정규화 url, 인덱스/PK
-        url: item.url,            // 원본 url
-        domain: item.domain,         // (선택)
-        harmful: item.harmful,
-        checked: item.checked
-      };
-    })
-  ).catch(()=>{console.log("총 실패한 데이터 수:" + errorCount)});
-  fetchURL.push(await DBCheckAndAdd(resolvedBatch));
-  console.log("flush!");
-  batchMap.set(tabId, []); // flush 후 비움
+async function maybeDBFlush() {
+  console.log("limit: "+BATCH_LIMIT+ " batch length: "+batchForDB.length);
+  if (batchForDB.length >= BATCH_LIMIT) await flushBatch();
+  clearTimeout(idleTForDB);
+  idleTForDB = setTimeout(flushBatch, IDLEForDB);
 }
 
 
-async function storeImage(tabId, url) {
-  if(!batchMap.has(tabId)) {
-    batchMap.set(tabId,[]);
+async function beforefetchbatch(){
+  console.log("timer에 의한 fetch");
+  await fetchBatch();
+}
 
+async function maybeFetch() {
+  console.log("maybefetch! |  현재 fetch 예정 data 수: "+batchForFetch.length);
+  if(batchForFetch.length >=BATCH_LIMIT_FOR_FETCH) {
+    await fetchBatch();
   }
-  const batch = batchMap.get(tabId);
-  batch.push(
+  else {
+    await fetchPromise;
+  }
+  console.log("프로미스 기다림 종료");
+  clearTimeout(idleTForFetch);
+  idleTForFetch = setTimeout(beforefetchbatch, IDLEFORFETCH);
+}
+
+  
+async function  fetchBatch() {
+  if(fetchPromise) return fetchPromise;
+
+  fetchPromise = (async () =>{
+    try {
+      if(batchForFetch.length === 0) return [];
+      const bodyData = JSON.stringify({ data:batchForFetch.splice(0,16)}); 
+      const start = performance.now();
+      console.log("fetch!");
+      const res =  await fetch("https://image-interceptor-683857194699.asia-northeast3.run.app/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: bodyData
+      });
+
+      if(!res.ok) throw new Error("서버 응답 오류");// catch로 이동
+      //const responseBodyData = res.json();
+       console.log(`response delaytime: ${(performance.now()-start)/1000}`);
+    } catch(err){
+       console.error(
+        err instanceof SyntaxError
+          ? `JSON parsing failed: ${err.message}`
+          : `Request failed: ${err.message}`
+      );
+    } 
+  })();
+
+  try {
+    await fetchPromise
+  } finally {
+    console.log("프로미스 종료");
+    fetchPromise = null;
+  }
+  return fetchPromise;
+}
+
+
+
+
+async function flushBatch() {
+  if(flushPromise) return flushPromise;
+
+  flushPromise = (async () => {
+    if(batchForDB.length === 0 ) return;
+    // 모든 canonicalUrlPromise가 끝나기를 기다림
+  
+    const errorCount = 0;
+    const snapshot = batchForDB.splice(0,batchForDB.length); //새로 push된 data를 잃어버리지 않기 위해 스냅샷 생성 후 이용
+    const resolvedBatch = await Promise.all(
+      snapshot.map(async (item) => {
+        let canonicalUrl;
+        // try {
+        //   canonicalUrl = await item.canonicalUrlPromise;
+        // } catch (e) {
+        //   console.log(item.url+"<-정규화 에러");
+        //   errorCount++;
+        //   canonicalUrl = item.url; //일단은 고유 url 넣고 push
+        // }
+        return {
+          canonicalUrl: item.url,   // 정규화 url, 인덱스/PK
+          tabId: item.tabId,
+          url: item.url           // 원본 url 
+        };
+      })
+    ).catch(()=>{console.log("총 실패한 데이터 수:" + errorCount)});
+    console.log("flush!");
+    batchForFetch.push(...await DBCheckAndAdd(resolvedBatch));
+    maybeFetch();
+  
+  })();
+
+  try {
+    await flushPromise
+  } finally {
+    flushPromise = null;
+  }
+}
+
+
+async function storeImage(tabId,url) {
+  batchForDB.push(
     {
     canonicalUrlPromise: canonicalizeImageUrl(url),
-    domain: (new URL(url)).hostname.replace(/^www\./, '') ,//수정예정,
-    url: url,
-    harmful: false,   // 기본값
-    checked: false,   // 검사완료
+    tabId:tabId,
+    url: url
     }
   );
   
-  if (batch.length >= BATCH_LIMIT) {
-    await flushBatch(tabId);
-  }
-
-  // if(!eventTimer.has(tabId)){
-  //   eventTimer.set(tabId, setTimeout( async () => {
-  //     try {
-  //       await flushBatch(tabId);
-
-  //     } catch(e) {
-  //       console.log
-  //     }
-  //   }), IDLE);
-      
-  // }
-  // else{
-  //   clearTimeout(eventTimer.get(tabId));
-  //    eventTimer.set(tabId, setTimeout( async () => {
-  //     try {
-  //       await flushBatch(tabId);
-
-  //     } catch(e) {
-  //       console.error(e);
-  //     }
-  //   }), IDLE);
-  // }
+  await maybeDBFlush();
 }
 
 
-
-
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  currentTab = tabId;
+});
 
 
 /*webRequest로 이미지 네트워크 수신 감지*/
 chrome.webRequest.onBeforeRequest.addListener(
-  async (details) => {
+  (details) => {
     if (details.type === "image" && details.tabId >= 0) {
+
       eventListner.push(details.url);
-      await storeImage(details.tabId, details.url);
+      storeImage( details.tabId, details.url);
 
-    }
-  },
-  { urls: ["<all_urls>"] },
-  []
-);
-
+    }  
+  },  
+  { urls: ["<all_urls>"] }
+);  
 
 
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const batchFromPage = message.data;
-  console.log(batchFromPage);
-  console.log("서비스 워커 수신 data: " + batchFromPage.length);
+  //console.log(batchFromPage);
+  //console.log("서비스 워커 수신 data: " + batchFromPage.length);
   // sendResponse({
   //       type: "response",
   //       data: batchFromPage, // 20개만 보내고, 배열은 자동으로 비움
   //     });
   if (message?.type === "imgDataFromPage") {
+    if(sender.tab.id )
      onlyCheck(message.data).then(batchFromPage => {
       sendResponse({
         type: "response",
@@ -339,15 +418,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "imgDataFromContentScript") {
-     onlyCheck(message.data).then(batchFromPage => {
+     onlyCheck(message.data).then(batchFromScript => {
       sendResponse({
         type: "response",
-        data: batchFromPage, 
+        data: batchFromScript, 
       });
     });
-   
     return true;
   }
 });
