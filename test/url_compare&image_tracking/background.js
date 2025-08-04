@@ -12,6 +12,7 @@ const BATCH_LIMIT_FOR_FETCH = 16;
 const IDLEForDB = 20;
 const IDLEFORFETCH = 100;
 
+let mustFlush = false;
 let idleTForDB = null;
 let idleTForFetch = null;
 let currentTab = null;
@@ -152,7 +153,7 @@ async function DBCheckAndAdd(batch) {
   await tx.done?.(); // 일부 브라우저에선 필요 없음
   
   firstToFetch.unshift(...laterToFetch);
-  //console.log("batch size:", batch.length);
+  console.log("DB add:전체/중복/추가 - "+ batch.length + "/" + (batch.length - firstToFetch.length) + "/" + firstToFetch.length);
   //console.log("fetchdata:"+firstToFetch.length);
   return firstToFetch;        
 }
@@ -258,18 +259,22 @@ async function onlyCheck(batch) {
 }
 
 
+
+async function DBFlushByIDLE () {
+  await flushBatch();
+  if(mustFlush) {
+    await fetchBatch();
+  };
+}
+
+
 async function maybeDBFlush() {
   console.log("limit: "+BATCH_LIMIT+ " batch length: "+batchForDB.length);
   if (batchForDB.length >= BATCH_LIMIT) await flushBatch();
   clearTimeout(idleTForDB);
-  idleTForDB = setTimeout(flushBatch, IDLEForDB);
+  idleTForDB = setTimeout(DBFlushByIDLE, IDLEForDB);
 }
 
-
-async function beforefetchbatch(){
-  console.log("timer에 의한 fetch");
-  await fetchBatch();
-}
 
 async function maybeFetch() {
   console.log("maybefetch! |  현재 fetch 예정 data 수: "+batchForFetch.length);
@@ -281,19 +286,19 @@ async function maybeFetch() {
   }
   console.log("프로미스 기다림 종료");
   clearTimeout(idleTForFetch);
-  idleTForFetch = setTimeout(beforefetchbatch, IDLEFORFETCH);
+  idleTForFetch = setTimeout(fetchBatch, IDLEFORFETCH);
 }
 
   
 async function  fetchBatch() {
-  if(fetchPromise) return fetchPromise;
-
-  fetchPromise = (async () =>{
     try {
-      if(batchForFetch.length === 0) return [];
-      const bodyData = JSON.stringify({ data:batchForFetch.splice(0,16)}); 
+      if(batchForFetch.length === 0) {
+        console.log("No fetchData");
+        return;}
+      const fetchData = { data:batchForFetch.splice(0,16)}; 
+      const bodyData = JSON.stringify(fetchData);
       const start = performance.now();
-      console.log("fetch!");
+      console.log("fetch!: ",fetchData.data.length);
       const res =  await fetch("https://image-interceptor-683857194699.asia-northeast3.run.app/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -310,16 +315,8 @@ async function  fetchBatch() {
           : `Request failed: ${err.message}`
       );
     } 
-  })();
-
-  try {
-    await fetchPromise
-  } finally {
-    console.log("프로미스 종료");
-    fetchPromise = null;
-  }
-  return fetchPromise;
 }
+
 
 
 
@@ -352,15 +349,18 @@ async function flushBatch() {
     ).catch(()=>{console.log("총 실패한 데이터 수:" + errorCount)});
     console.log("flush!");
     batchForFetch.push(...await DBCheckAndAdd(resolvedBatch));
-    maybeFetch();
+    fetchBatch();
   
   })();
 
   try {
-    await flushPromise
+    await flushPromise;
   } finally {
     flushPromise = null;
+    if(batchForDB.length !=0 ) mustFlush = true;
+    else mustFlush = false;
   }
+
 }
 
 
