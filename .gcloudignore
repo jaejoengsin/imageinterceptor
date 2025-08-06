@@ -1,0 +1,41 @@
+# .gcloudignore - Google Cloud 배포 시 제외할 파일들
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.env
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 로그 및 임시 파일
+*.log
+.DS_Store
+Thumbs.db
+
+# 테스트 파일
+test_*.py
+*_test.py
+tests/
+
+# 문서
+README.md
+SETUP_GUIDE.md
+*.md
+
+# Git
+.git/
+.gitignore
+
+# 로컬 개발용 파일
+.env.local
+local_test.py 
