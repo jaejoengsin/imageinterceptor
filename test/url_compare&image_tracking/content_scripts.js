@@ -2,10 +2,24 @@
 //const batchPort = chrome.runtime.connect({ name: 'batch' });
 // const DOMLoadComplete = false;
 // let loadingImg = chrome.runtime.getURL("src/css/masking.css")
+
+
+let filterModule;
+
 let testcnt = 0;
+let NoNSafeImgCount = 0;
 const dataBuffer = [];
 const MAX_N = 16, IDLE = 50;
-let idleT = null
+let idleT = null;
+
+
+(async () => {
+  try {
+    filterModule = await import (chrome.runtime.getURL('test/url_compare&image_tracking/url_filterModule_based_safe_pattern.js'));
+  } catch (e) {
+    console.error('모듈을 동적으로 불러오는데 실패했습니다:', e);
+  }
+})();
 
 
 const link = document.createElement('link');
@@ -18,6 +32,7 @@ link.onload = () => {(console.log("masking 파일 로드 완료"));};
 
 const script = document.createElement('script');
 script.src = chrome.runtime.getURL('test/url_compare&image_tracking/injectedContent.js');  // 따로 파일로 뽑아 관리 가능
+script.type = 'module';
 (document.head || document.documentElement).prepend(script);
 link.onload = () => {
  (console.log("스크립트 주입 완료"));
@@ -119,7 +134,7 @@ function Flush() {
 //상대경로 -> 절대경로
 function toAbsoluteUrl(url, baseUrl = document.baseURI) {
   try {
-    return new URL(url, baseUrl).toString();
+    return new URL(url, baseUrl);
   } catch {
     return url;
   }
@@ -135,11 +150,23 @@ function maskAndSend (img, type) {
   //if (img.classList.contains('imgMasking')|| img.classList.contains('staticIMG')|| img.classList.contains('dynamicIMG')) return;
   const url = img.currentSrc || img.src;
   if (!url || url === '') return;          // 빈 URL 걸러냄
-  absUrl = toAbsoluteUrl(url, baseURI = document.baseURI );
+  let absUrl;
+  try{
+    absUrl = toAbsoluteUrl(url, document.baseURI );
+  } catch(e){
+    console.error("URL 정규화 과정 중에 에러 발생 - ", e);
+    return;
+  }
+  if(filterModule.filter_based_safeUrlPattern(absUrl)){
+    NoNSafeImgCount++;
+    img.dataset.imgId = "NOTHARMFUL";
+    console.log("비유해 이미지:",absUrl.toString()," 총합:",NoNSafeImgCount);
+    return;
+  }
   img.classList.add("imgMasking", type); //일단은 static 이미지는 static이라고 클래스에 명시. 현재는 클래스 사용. 나중에 필요하면 새로운 속성을 추가하는 식으로 바꿀수도
   const uuid = crypto.randomUUID();
   img.dataset.imgId = uuid;
-  dataBuffer.push({ id: uuid, url: absUrl, harmful: false, response: false });
+  dataBuffer.push({ id: uuid, url: absUrl.toString(), harmful: false, response: false });
   maybeFlush();
 
 }
@@ -175,16 +202,19 @@ const imgObserver = new MutationObserver(mutations => {
 
     mutation.addedNodes.forEach(node => {
       if (node.nodeType !== 1) return;  // element만 처리
+     
 
       if (node.tagName === 'IMG') {
         // <img>가 들어온 경우
-        if (!node.dataset.imgID) {       
-          const hasSrcSet = !!node.getAttribute('srcset');
-          //console.log("mutateobserver detected |  " + "url: "+ node.src);  
-           checkCurrentSrc(node, htmlImgElement => {
-              maskAndSend(htmlImgElement, 'dynamicIMG');
-            } );       
-          // console.log("hasSrcset: "+ hasSrcSet);
+        if (!node.dataset.imgId){
+          
+        //const hasSrcSet = !!node.getAttribute('srcset');
+        //console.log("mutateobserver detected |  " + "url: "+ node.src);  
+          checkCurrentSrc(node, htmlImgElement => {
+          maskAndSend(htmlImgElement, 'dynamicIMG');
+          } ); 
+        }
+        // console.log("hasSrcset: "+ hasSrcSet);
           // const hasSource = node.parentElement && node.parentElement.querySelector('source');
           // if(hasSrcSet || hasSource){
           //   console.log(" mutateobserver detected & currentSrc used ");
@@ -192,22 +222,24 @@ const imgObserver = new MutationObserver(mutations => {
           //   checkCurrentSrc(node, htmlImgElement => {
           //     maskAndSend(htmlImgElement, 'dynamicIMG');
           //   } );
-          // }
+          // }s
           // else{
           //   maskAndSend(node, 'dynamicIMG');
           // }
-        }
+        
       } else {
         
         // <img>가 아닌 요소가 들어온 경우: 자식 img 검색
         node.querySelectorAll('img').forEach(img => {
-          
-          if (!img.dataset.imgID) {
+
+          if (!img.dataset.imgId) {
+            if(img.dataset.imgId == "NOTHARMFUL") console.log("이미 수집한 중복 비유해 이미지");
             //console.log("mutateobserver detected |  " + "url: "+ img.src);
-            checkCurrentSrc(img, htmlImgElement => {
-                //console.log("currentSrc used: "+ htmlImgElement.currentSrc);
-                maskAndSend(htmlImgElement, 'dynamicIMG');
-            } );
+          checkCurrentSrc(img, htmlImgElement => {
+              //console.log("currentSrc used: "+ htmlImgElement.currentSrc);
+              maskAndSend(htmlImgElement, 'dynamicIMG');
+          } );
+          }
             // const hasSrcSet = !!node.getAttribute('srcset');
             // const hasSource = node.parentElement && node.parentElement.querySelector('source');
             // console.log("hasSrcset: "+ hasSrcSet);//thread에서 false 나옴. 왜?
@@ -222,7 +254,7 @@ const imgObserver = new MutationObserver(mutations => {
             // else{
             //   maskAndSend(img, 'dynamicIMG');
             // }
-          }
+          
         });
       }
     });
@@ -237,7 +269,7 @@ function Collect_staticImg () {
 
   staticImgs.forEach(img => {
     const currentImg = img; // 'this' 컨텍스트 문제 해결을 위한 캡처
-    if(!currentImg.dataset.imgID){
+    if(!currentImg.dataset.imgId){
       maskAndSend(currentImg,"staticIMG");
     }
 

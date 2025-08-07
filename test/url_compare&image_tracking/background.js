@@ -349,7 +349,7 @@ async function flushBatch() {
     ).catch(()=>{console.log("총 실패한 데이터 수:" + errorCount)});
     console.log("flush!");
     batchForFetch.push(...await DBCheckAndAdd(resolvedBatch));
-    fetchBatch();
+    //fetchBatch();
   
   })();
 

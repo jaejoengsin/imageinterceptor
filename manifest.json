@@ -8,15 +8,16 @@
       "default_icon": "images/icons/main_icon.png"
     },
 
-    "content_scripts": [{
-      "matches": ["<all_urls>"],
-      "js": [
-         "test/url_compare&image_tracking/content_scripts.js"
-      ],
-      "run_at": "document_start",
-      "all_frames": true,
-      "match_about_blank": false
-    }],
+    "content_scripts": [
+  {
+    "matches": ["<all_urls>"],
+    "run_at": "document_start",
+    "all_frames": true,
+    "match_about_blank": false,
+    "js": ["test/url_compare&image_tracking/content_scripts.js"],  
+    "type": "module"}
+]
+,
 
     "background": {
     "service_worker": "test/url_compare&image_tracking/background.js",
@@ -31,7 +32,8 @@
   {
     "resources": ["test/url_compare&image_tracking/injectedContent.js", 
                   "src/css/test.css", "src/css/masking.css", 
-                  "images/icons/*.png", "test/url_compare&image_tracking/utils/nomarlize-url-main"
+                  "images/icons/*.png", "test/url_compare&image_tracking/utils/nomarlize-url-main",
+                  "test/url_compare&image_tracking/url_filterModule_based_safe_pattern.js"
                   ],
     "matches": ["<all_urls>"]
   }
