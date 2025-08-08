@@ -1,9 +1,10 @@
 """
-URL 유효성 검증 서비스 (비동기)
+URL 유효성 검증 서비스 (고속 비동기)
 공개적으로 접근 가능한 이미지 URL인지 확인
 """
-import httpx
 from urllib.parse import urlparse
+from services.http_client import get_http_client
+import httpx
 
 async def is_valid_public_image_url(img_url: str) -> tuple[bool, str]:
     """
@@ -21,9 +22,13 @@ async def is_valid_public_image_url(img_url: str) -> tuple[bool, str]:
         - URL 접근성 (HEAD 요청)
         - Content-Type이 이미지인지 확인
         
+    최적화:
+        - 연결 풀링 (HTTP/2, Keep-alive)
+        - 단축된 타임아웃 (2초)
+        
     Note:
-        - 파일 크기는 Vision API에서 자체 처리 (최대 20MB)
-        - 성능 최적화를 위해 크기 사전 검증 생략
+        - URL 중복 처리는 프론트엔드에서 담당
+        - 백엔드는 순수 검증 로직만 처리
     """
     try:
         # 1. URL 형식 검증
@@ -35,10 +40,10 @@ async def is_valid_public_image_url(img_url: str) -> tuple[bool, str]:
         if parsed_url.scheme not in ['http', 'https']:
             return False, "HTTP 또는 HTTPS 프로토콜만 지원됩니다"
         
-        # 3. HEAD 요청으로 접근성 및 메타데이터 확인
-        async with httpx.AsyncClient() as client:
-            head_response = await client.head(img_url, timeout=5, follow_redirects=True)
-            head_response.raise_for_status()
+        # 3. HEAD 요청으로 접근성 및 메타데이터 확인 (고속 연결 풀 사용)
+        client = await get_http_client()
+        head_response = await client.head(img_url)
+        head_response.raise_for_status()
         
         # 4. Content-Type 확인 (이미지 파일인지 검증)
         content_type = head_response.headers.get('content-type', '').lower()

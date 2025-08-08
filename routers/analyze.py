@@ -1,13 +1,128 @@
 """
-이미지 분석 라우터 (비동기)
+이미지 분석 라우터 (시간 기반 배치 처리)
 """
 import asyncio
-from fastapi import APIRouter, HTTPException
+import uuid
+from typing import Dict, Any
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from models.image import BatchAnalyzeRequest, BatchAnalyzeResponse, ImageResult
-from services.vision_client import analyze_images_batch
-from services.url_validator import is_valid_public_image_url
+from services.batch_processor import batch_processor
 
 router = APIRouter()
+
+# 결과 저장소 (실제로는 Redis나 DB 사용 권장)
+pending_results: Dict[str, Dict[str, Any]] = {}
+
+@router.post("/queue", response_model=Dict[str, Any])
+async def add_images_to_batch_queue(request: BatchAnalyzeRequest):
+    """
+    이미지를 배치 큐에 추가 (초고속 시간 기반 처리)
+    
+    - 16개가 모이면 즉시 처리
+    - 1.5초 동안 이미지가 추가되지 않으면 현재까지 모인 것만 처리
+    """
+    if len(request.data) > 16:
+        raise HTTPException(
+            status_code=400,
+            detail="한 번에 최대 16개 이미지만 처리할 수 있습니다."
+        )
+    
+    # 배치 처리기 시작 (이미 실행 중이면 무시됨)
+    await batch_processor.start()
+    
+    # 각 이미지에 고유 ID 할당
+    image_ids = []
+    
+    for image_data in request.data:
+        image_id = str(uuid.uuid4())
+        image_ids.append(image_id)
+        
+        # 결과 객체 생성
+        result = ImageResult(
+            canonicalUrl=image_data.canonicalUrl,
+            url=image_data.url,
+            status=image_data.status,
+            harmful=image_data.harmful
+        )
+        
+        # 대기 중인 결과에 등록
+        pending_results[image_id] = {
+            "result": result,
+            "completed": False,
+            "timestamp": asyncio.get_event_loop().time()
+        }
+        
+        # 배치 큐에 추가
+        async def result_callback(img_id: str, processed_result: ImageResult):
+            if img_id in pending_results:
+                pending_results[img_id]["result"] = processed_result
+                pending_results[img_id]["completed"] = True
+        
+        await batch_processor.add_image(
+            image_id=image_id,
+            image_data=image_data,
+            result=result,
+            callback=result_callback
+        )
+    
+    return {
+        "message": f"{len(request.data)}개 이미지를 배치 큐에 추가했습니다",
+        "image_ids": image_ids,
+        "queue_info": {
+            "max_batch_size": 16,
+            "max_wait_time": "1.5초",
+            "processing_method": "16개 모이거나 1.5초 후 자동 처리"
+        },
+        "status_check_url": "/analyze/status",
+        "estimated_processing_time": "최대 1.5초"
+    }
+
+@router.get("/status")
+async def check_batch_status(image_ids: str = None):
+    """
+    배치 처리 상태 확인
+    
+    Args:
+        image_ids: 쉼표로 구분된 이미지 ID 목록 (예: "id1,id2,id3")
+    """
+    if not image_ids:
+        # 전체 상태 반환
+        total_pending = len([r for r in pending_results.values() if not r["completed"]])
+        total_completed = len([r for r in pending_results.values() if r["completed"]])
+        
+        return {
+            "total_pending": total_pending,
+            "total_completed": total_completed,
+            "queue_size": len(batch_processor.batch_queue) if batch_processor else 0
+        }
+    
+    # 특정 이미지들의 상태 확인
+    requested_ids = [id.strip() for id in image_ids.split(",")]
+    results = {}
+    
+    for img_id in requested_ids:
+        if img_id in pending_results:
+            if pending_results[img_id]["completed"]:
+                results[img_id] = {
+                    "status": "completed",
+                    "result": pending_results[img_id]["result"]
+                }
+            else:
+                results[img_id] = {
+                    "status": "pending",
+                    "message": "처리 대기 중..."
+                }
+        else:
+            results[img_id] = {
+                "status": "not_found",
+                "message": "해당 ID를 찾을 수 없습니다"
+            }
+    
+    return {
+        "results": results,
+        "completed_count": len([r for r in results.values() if r["status"] == "completed"]),
+        "pending_count": len([r for r in results.values() if r["status"] == "pending"])
+    }
 
 @router.post("", response_model=BatchAnalyzeResponse)
 async def analyze_images_batch_endpoint(request: BatchAnalyzeRequest):
@@ -160,6 +275,23 @@ async def health_check():
         "environment": config.get_environment(),
         "vision_api_configured": config.is_configured(),
         "auth_method": config.get_auth_method(),
-        "max_batch_size": 16,
-        "supported_endpoints": ["/analyze/", "/analyze/health"]
+        "batch_processing": {
+            "max_batch_size": 16,
+            "max_wait_time": "1.5초",
+            "queue_size": len(batch_processor.batch_queue) if batch_processor else 0,
+            "processor_running": batch_processor.running if batch_processor else False
+        },
+        "supported_endpoints": [
+            "/analyze/ (즉시 처리)",
+            "/analyze/queue (시간 기반 배치)",
+            "/analyze/status (상태 확인)",
+            "/analyze/health"
+        ],
+        "features": [
+            "즉시 처리: 기존 방식 (최대 16개)",
+            "초고속 배치: 16개 모이거나 1.5초 후 자동 처리",
+            "연결 풀링: HTTP 연결 재사용으로 네트워크 지연 최소화",
+            "프론트엔드 중복 처리: URL 중복 검사는 클라이언트에서 담당",
+            "비동기 상태 확인: 처리 상태 실시간 조회"
+        ]
     }
