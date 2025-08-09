@@ -245,7 +245,7 @@ class imageObservers {
     });
   }
 }  
-
+console.log("테스트");
 
 
 function Collect_staticImg () {
