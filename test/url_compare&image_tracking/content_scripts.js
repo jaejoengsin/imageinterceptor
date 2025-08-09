@@ -124,11 +124,11 @@ function maskAndSend (img, type) {
     console.error("오류를 발생시킨 이미지의 url:", url);
     return;
   }
-  img.classList.add("imgMasking", type); //일단은 static 이미지는 static이라고 클래스에 명시. 현재는 클래스 사용. 나중에 필요하면 새로운 속성을 추가하는 식으로 바꿀수도
-  if(img.dataset.imgId) console.log("이미 id가 존재합니다: ", img.dataset.imgId);
-  const uuid = crypto.randomUUID();
-  img.dataset.imgId = uuid;
-  dataBuffer.push({ id: uuid, url: absUrl.toString(), harmful: false, response: false });
+  //img.classList.add("imgMasking", type); //일단은 static 이미지는 static이라고 클래스에 명시. 현재는 클래스 사용. 나중에 필요하면 새로운 속성을 추가하는 식으로 바꿀수도
+  //if(img.dataset.imgId) console.log("이미 id가 존재합니다: ", img.dataset.imgId);
+  // const uuid = crypto.randomUUID();
+  // img.dataset.imgId = uuid;
+  dataBuffer.push({ id: img.dataset.imgId, url: absUrl.toString(), harmful: false, response: false });
   maybeFlush();
 
 }
@@ -181,17 +181,18 @@ class imageObservers {
       const elements = [];
       mutations.forEach(mutation => {
         if (mutation.type === 'childList'){
-          mutation.addedNodes.forEach(node => {
+          mutation.addedNodes.forEach( node => {
             if (node.nodeType !== 1) return;  // element만 처리
             if (node.tagName === 'IMG') {
               // <img>가 들어온 경우
+              console.log("observer <new node> detect");
+              
+              node.classList.add("imgMasking","asdfsaf"); //일단은 static 이미지는 static이라고 클래스에 명시. 현재는 클래스 사용. 나중에 필요하면 새로운 속성을 추가하는 식으로 바꿀수도
+              node.dataset.imgId = crypto.randomUUID();
+
+              elements.push(node);
+              console.log("이미지의 id는: ", node.dataset.imgId);
               if (!node.dataset.imgId){
-                console.log("observer <new node> detect");
-                
-                node.classList.add("imgMasking", 'dynamicIMG'); //일단은 static 이미지는 static이라고 클래스에 명시. 현재는 클래스 사용. 나중에 필요하면 새로운 속성을 추가하는 식으로 바꿀수도
-                node.dataset.imgId = crypto.randomUUID();
-                elements.push(node);
-                console.log("이미지의 id는: ", node.dataset.imgId);
                 // checkCurrentSrc(node, htmlImgElement => {
                 // maskAndSend(htmlImgElement, 'dynamicIMG');
                 // } ); 
@@ -200,21 +201,21 @@ class imageObservers {
     
             } else {
               // <img>가 아닌 요소가 들어온 경우: 자식 img 검색
-              node.querySelectorAll('img').forEach(img => {
+              node.querySelectorAll('img').forEach( img => {
                 
+                console.log("observer <new node> detect");
+  
+                img.classList.add("imgMasking","asdfsaf"); //일단은 static 이미지는 static이라고 클래스에 명시. 현재는 클래스 사용. 나중에 필요하면 새로운 속성을 추가하는 식으로 바꿀수도
+                img.dataset.imgId = crypto.randomUUID();
+                elements.push(img);
+                console.log("이미지의 id는: ", img.dataset.imgId);
+        
                 if (!img.dataset.imgId) {
     
-                  console.log("observer <new node> detect");
-    
-                  img.classList.add("imgMasking", 'dynamicIMG'); //일단은 static 이미지는 static이라고 클래스에 명시. 현재는 클래스 사용. 나중에 필요하면 새로운 속성을 추가하는 식으로 바꿀수도
-                  img.dataset.imgId = crypto.randomUUID();
-                  elements.push(img);
-                  console.log("이미지의 id는: ", node.dataset.imgId);
-          
                 // checkCurrentSrc(img, htmlImgElement => {
                 //     maskAndSend(htmlImgElement, 'dynamicIMG');
                 // } );
-                }
+                } 
         
               });
             }
@@ -231,7 +232,7 @@ class imageObservers {
     childList: true, //자식
     subtree: true, //자손
     attributes: true,
-    attributeFilter: ['src']
+    attributeFilter['src']
     });
   }
 }  
@@ -287,7 +288,7 @@ async function pageInit() {
     
     // ... static 이미지 처리 로직 ...
   filterModule = await import (chrome.runtime.getURL('test/url_compare&image_tracking/url_filterModule_based_safe_pattern.js'));
-  Collect_staticImg();
+  //Collect_staticImg();
   if(document.readyState!="loading"){
     IMGObs = new imageObservers;
     IMGObs.imgObserve();
