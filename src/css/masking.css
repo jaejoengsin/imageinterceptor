@@ -6,6 +6,9 @@
   opacity: 0 !important;  /* 요소를 투명하게 만들지만 공간은 차지 */
   background-color: blue !important; /* 배경색으로 가리는 방법 */
 }
+
+ 
+
  
  html  {
   /*visibility: hidden !important; /* 요소를 숨기지만 공간은 차지 */
@@ -25,7 +28,7 @@
   
   /* 원하는 배경 스타일 */
   /*background-color: blue !important; /* 예: 파란색 배경 */
-  background-image: url('chrome-extension://ipglijdpkmmcliggplhpoeffpfidkhfe/images/icons/icon2.png') !important; 
+  background-image: url('chrome-extension://figlemailhemmegcpfjfhjooegknoooh/images/icons/icon2.png') !important; 
   background-size: cover !important;
   background-repeat: no-repeat !important;
   background-position: center center !important;
