@@ -62,5 +62,12 @@ export const SAFE_RULES = [
 
 /* ❼ 단일 헬퍼 -------------------------------------------------------- */
 export function filter_based_safeUrlPattern(url) {
-  return SAFE_RULES.some(fn => fn(url));
+  let result;
+  try{
+   result = SAFE_RULES.some(fn => fn(url));
+  } catch(e) {
+    console("비유해 이미지 필터링 중 오류 발생, url: ", url);
+    return false;
+  }
+  return result;
 }

@@ -1,25 +1,13 @@
 
-//const batchPort = chrome.runtime.connect({ name: 'batch' });
-// const DOMLoadComplete = false;
-// let loadingImg = chrome.runtime.getURL("src/css/masking.css")
-
 
 let filterModule;
-
+let IMGObs;
 let testcnt = 0;
 let NoNSafeImgCount = 0;
 const dataBuffer = [];
 const MAX_N = 16, IDLE = 50;
 let idleT = null;
 
-
-(async () => {
-  try {
-    filterModule = await import (chrome.runtime.getURL('test/url_compare&image_tracking/url_filterModule_based_safe_pattern.js'));
-  } catch (e) {
-    console.error('모듈을 동적으로 불러오는데 실패했습니다:', e);
-  }
-})();
 
 
 const link = document.createElement('link');
@@ -30,13 +18,15 @@ link.onload = () => {(console.log("masking 파일 로드 완료"));};
 (document.head || document.documentElement).prepend(link);
 
 
-const script = document.createElement('script');
-script.src = chrome.runtime.getURL('test/url_compare&image_tracking/injectedContent.js');  // 따로 파일로 뽑아 관리 가능
-script.type = 'module';
-(document.head || document.documentElement).prepend(script);
-link.onload = () => {
- (console.log("스크립트 주입 완료"));
- }; 
+// const script = document.createElement('script');
+// script.src = chrome.runtime.getURL('test/url_compare&image_tracking/injectedContent.js');  // 따로 파일로 뽑아 관리 가능
+// script.type = 'module';
+// (document.head || document.documentElement).prepend(script);
+// link.onload = () => {
+//  (console.log("스크립트 주입 완료"));
+//  }; 
+
+
 
 if (window.top === window.self) {
   const overlayDiv = document.createElement('div');
@@ -48,35 +38,6 @@ if (window.top === window.self) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //setInterval(() => { console.log(document.readyState); }, 1000);
-
-/**
- * Convert ArrayBuffer to hex string.
- * @param {ArrayBuffer} buffer
- * @returns {string}
- */
-const encoder   = new TextEncoder();
-function bufferToHex(buffer) {
-  const byteArray = new Uint8Array(buffer); // 버퍼를 0-255 범위의 바이트 배열처럼 인덱스로 순회 1바이트 -> 8비트 -> unsigndeint = 0~255
-  return Array.from(byteArray) //Uint8Array를 일반 JS 배열로 복사. ([byte0, byte1, …])
-    .map(b => b.toString(16).padStart(2, '0')) //각 바이트 b를 b.toString(16) → 16진수 문자열(예 13 → "d"), padStart(2,'0') → 두 자리로 앞쪽 0 채움("0d").
-    .join('');//두 자리씩 나온 16진수 토큰들을 공백 없이 연결
-}
-
-
-
-/**
- * Generate SHA-256 hash for a given string using SubtleCrypto.
- * It returns a promise resolving to a hexadecimal representation.
- * @param {string} text
- * @returns {Promise<string>}
- */
-function generateSHA256(text) {
-  const data = encoder.encode(text);
-  if (crypto && crypto.subtle && crypto.subtle.digest) {
-    return crypto.subtle.digest('SHA-256', data).then(bufferToHex);
-  }
-  return Promise.reject(new Error('SubtleCrypto not supported'));
-}
 
 
 function maybeFlush() {
@@ -118,7 +79,7 @@ function Flush() {
           }
         }
         catch(e){
-          console.log("from contentsscriptdata: id 못찾음: "+ item );
+          console.log("마스킹 해제 중에 오류 발생: "+ e);
         }
       }
     ); 
@@ -153,17 +114,18 @@ function maskAndSend (img, type) {
   let absUrl;
   try{
     absUrl = toAbsoluteUrl(url, document.baseURI );
-  } catch(e){
-    console.error("URL 정규화 과정 중에 에러 발생 - ", e);
-    return;
-  }
-  if(filterModule.filter_based_safeUrlPattern(absUrl)){
+    if(filterModule.filter_based_safeUrlPattern(absUrl)){
     NoNSafeImgCount++;
     img.dataset.imgId = "NOTHARMFUL";
-    console.log("비유해 이미지:",absUrl.toString()," 총합:",NoNSafeImgCount);
+    //console.log("비유해 이미지:",absUrl.toString()," 총합:",NoNSafeImgCount);
+    return;
+  }} catch(e){
+    console.error("URL 정규화 과정&비유해이미지 필터링 중 오류 발생: - ", e);
+    console.error("오류를 발생시킨 이미지의 url:", url);
     return;
   }
   img.classList.add("imgMasking", type); //일단은 static 이미지는 static이라고 클래스에 명시. 현재는 클래스 사용. 나중에 필요하면 새로운 속성을 추가하는 식으로 바꿀수도
+  if(img.dataset.imgId) console.log("이미 id가 존재합니다: ", img.dataset.imgId);
   const uuid = crypto.randomUUID();
   img.dataset.imgId = uuid;
   dataBuffer.push({ id: uuid, url: absUrl.toString(), harmful: false, response: false });
@@ -172,7 +134,7 @@ function maskAndSend (img, type) {
 }
 
 //currentsrc에 값이 생길때까지 다음 repaint 턴을 비동기적으로 기다리고, 반복.
-  function checkCurrentSrc(img, callback, timeout = 1000000) { //lazy loading으로 인해 기다리는 시간이 얼마나 지속되느냐에 따라 currentSrc를 얻을 수도 있고 못 얻을 수도 있음. 특히 유튜브 같은
+  function checkCurrentSrc(img, callback, timeout = 1000) { //lazy loading으로 인해 기다리는 시간이 얼마나 지속되느냐에 따라 currentSrc를 얻을 수도 있고 못 얻을 수도 있음. 특히 유튜브 같은
     //동적 사이트 대상
   const start = performance.now();
   function check() {
@@ -195,72 +157,112 @@ function maskAndSend (img, type) {
 //이미지 노드에 srcset이 존재하거나 source 태그가 존재할 경우 브라우저가 srcset을 선택하여 렌더링할 수 도 있음. 이 경우
 // srcset이 서비스 워커 데이터 베이스에 등록되며 어떤 srcset이 등록되는지 예측할 수 없으므로 src를 기준으로 함. 따라서 이 경우 src의 url로 데이터베이스 재등록 및 해당 url로 재요청
 
+class imageObservers {
+  
+  constructor() {
 
-const imgObserver = new MutationObserver(mutations => {
-  mutations.forEach(mutation => {
-    if (mutation.type !== 'childList') return;
-
-    mutation.addedNodes.forEach(node => {
-      if (node.nodeType !== 1) return;  // element만 처리
-     
-
-      if (node.tagName === 'IMG') {
-        // <img>가 들어온 경우
-        if (!node.dataset.imgId){
-          
-        //const hasSrcSet = !!node.getAttribute('srcset');
-        //console.log("mutateobserver detected |  " + "url: "+ node.src);  
-          checkCurrentSrc(node, htmlImgElement => {
-          maskAndSend(htmlImgElement, 'dynamicIMG');
-          } ); 
-        }
-        // console.log("hasSrcset: "+ hasSrcSet);
-          // const hasSource = node.parentElement && node.parentElement.querySelector('source');
-          // if(hasSrcSet || hasSource){
-          //   console.log(" mutateobserver detected & currentSrc used ");
-          //   node.classList.add("imgMasking", 'dynamicIMG');
-          //   checkCurrentSrc(node, htmlImgElement => {
-          //     maskAndSend(htmlImgElement, 'dynamicIMG');
-          //   } );
-          // }s
-          // else{
-          //   maskAndSend(node, 'dynamicIMG');
-          // }
-        
-      } else {
-        
-        // <img>가 아닌 요소가 들어온 경우: 자식 img 검색
-        node.querySelectorAll('img').forEach(img => {
-
-          if (!img.dataset.imgId) {
-            if(img.dataset.imgId == "NOTHARMFUL") console.log("이미 수집한 중복 비유해 이미지");
-            //console.log("mutateobserver detected |  " + "url: "+ img.src);
-          checkCurrentSrc(img, htmlImgElement => {
-              //console.log("currentSrc used: "+ htmlImgElement.currentSrc);
-              maskAndSend(htmlImgElement, 'dynamicIMG');
-          } );
-          }
-            // const hasSrcSet = !!node.getAttribute('srcset');
-            // const hasSource = node.parentElement && node.parentElement.querySelector('source');
-            // console.log("hasSrcset: "+ hasSrcSet);//thread에서 false 나옴. 왜?
-            // if(hasSrcSet || hasSource){
-            //   img.classList.add("imgMasking", 'dynamicIMG');
-            //   console.log(" mutateobserver detected & currentSrc used ");
-            //   checkCurrentSrc(img, htmlImgElement => {
-            //     //console.log("currentSrc used: "+ htmlImgElement.currentSrc);
-            //     maskAndSend(htmlImgElement, 'dynamicIMG');
-            // } );
-            // }
-            // else{
-            //   maskAndSend(img, 'dynamicIMG');
-            // }
-          
-        });
-      }
+    this.imgViewObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        const imgObj = entry.target;
+        console.log("imgviewObserver observe entry, id: ",imgObj.dataset.imgId);
+        checkCurrentSrc(imgObj, htmlImgElement => {
+                maskAndSend(htmlImgElement, 'dynamicIMG');
+                } ); 
+        this.imgViewObserver.unobserve(imgObj);
+      });
+      
+    }, {
+      root: null,
+      rootMargin: "0px",
+      threshold: 0,
     });
-  });
-});
+    
+    this.imgObserver = new MutationObserver(mutations => {
+      const elements = [];
+      mutations.forEach(mutation => {
+        if (mutation.type === 'childList'){
+          mutation.addedNodes.forEach(node => {
+            if (node.nodeType !== 1) return;  // element만 처리
+            if (node.tagName === 'IMG') {
+              // <img>가 들어온 경우
+              if (!node.dataset.imgId){
+                console.log("observer <new node> detect");
+                
+                node.classList.add("imgMasking", 'dynamicIMG'); //일단은 static 이미지는 static이라고 클래스에 명시. 현재는 클래스 사용. 나중에 필요하면 새로운 속성을 추가하는 식으로 바꿀수도
+                node.dataset.imgId = crypto.randomUUID();
+                elements.push(node);
+                console.log("이미지의 id는: ", node.dataset.imgId);
+                // checkCurrentSrc(node, htmlImgElement => {
+                // maskAndSend(htmlImgElement, 'dynamicIMG');
+                // } ); 
+              }
+            
+    
+            } else {
+              // <img>가 아닌 요소가 들어온 경우: 자식 img 검색
+              node.querySelectorAll('img').forEach(img => {
+                
+                if (!img.dataset.imgId) {
+    
+                  console.log("observer <new node> detect");
+    
+                  img.classList.add("imgMasking", 'dynamicIMG'); //일단은 static 이미지는 static이라고 클래스에 명시. 현재는 클래스 사용. 나중에 필요하면 새로운 속성을 추가하는 식으로 바꿀수도
+                  img.dataset.imgId = crypto.randomUUID();
+                  elements.push(img);
+                  console.log("이미지의 id는: ", node.dataset.imgId);
+          
+                // checkCurrentSrc(img, htmlImgElement => {
+                //     maskAndSend(htmlImgElement, 'dynamicIMG');
+                // } );
+                }
+        
+              });
+            }
+          });
+        }
+    
+      });
+      elements.forEach(el => this.imgViewObserver.observe(el));
+    });
+  }  
 
+  imgObserve() {
+    this.imgObserver.observe(document.body, {
+    childList: true, //자식
+    subtree: true, //자손
+    attributes: true,
+    attributeFilter: ['src']
+    });
+  }
+}  
+
+
+
+// function maskAndSend (img, type) {
+//   //if (img.classList.contains('imgMasking')|| img.classList.contains('staticIMG')|| img.classList.contains('dynamicIMG')) return;
+//   const url = img.currentSrc || img.src;
+//   if (!url || url === '') return;          // 빈 URL 걸러냄
+//   let absUrl;
+//   try{
+//     absUrl = toAbsoluteUrl(url, document.baseURI );
+//     if(filterModule.filter_based_safeUrlPattern(absUrl)){
+//     NoNSafeImgCount++;
+//     img.dataset.imgId = "NOTHARMFUL";
+//     //console.log("비유해 이미지:",absUrl.toString()," 총합:",NoNSafeImgCount);
+//     return;
+//   }} catch(e){
+//     console.error("URL 정규화 과정&비유해이미지 필터링 중 오류 발생: - ", e);
+//     console.error("오류를 발생시킨 이미지의 url:", url);
+//     return;
+//   }
+//   img.classList.add("imgMasking", type); //일단은 static 이미지는 static이라고 클래스에 명시. 현재는 클래스 사용. 나중에 필요하면 새로운 속성을 추가하는 식으로 바꿀수도
+//   if(img.dataset.imgId) console.log("이미 id가 존재합니다: ", img.dataset.imgId);
+//   const uuid = crypto.randomUUID();
+//   img.dataset.imgId = uuid;
+//   dataBuffer.push({ id: uuid, url: absUrl.toString(), harmful: false, response: false });
+//   maybeFlush();
+
+// }
 
 
 function Collect_staticImg () {
@@ -277,21 +279,18 @@ function Collect_staticImg () {
 
 }
 
-
 //초기화 함수
-function pageInit() {
+async function pageInit() {
 
   // if(DOMLoadComplete) return;
   // DOMLoadComplete = true
     
     // ... static 이미지 처리 로직 ...
+  filterModule = await import (chrome.runtime.getURL('test/url_compare&image_tracking/url_filterModule_based_safe_pattern.js'));
   Collect_staticImg();
   if(document.readyState!="loading"){
-    imgObserver.observe(document.body, {
-    childList: true, //자식
-    subtree: true, //자손
-    attributes: false
-    });
+    IMGObs = new imageObservers;
+    IMGObs.imgObserve();
  }
 
  if (window.top === window.self) {
