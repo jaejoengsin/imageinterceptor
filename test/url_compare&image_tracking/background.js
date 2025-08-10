@@ -299,7 +299,7 @@ async function  fetchBatch() {
       const bodyData = JSON.stringify(fetchData);
       const start = performance.now();
       console.log("fetch!: ",fetchData.data.length);
-      const res =  await fetch("https://image-interceptor-683857194699.asia-northeast3.run.app/analyze", {
+      const res =  await fetch("https://imageinterceptor-api-683857194699.asia-northeast3.run.app/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: bodyData
@@ -349,7 +349,7 @@ async function flushBatch() {
     ).catch(()=>{console.log("총 실패한 데이터 수:" + errorCount)});
     console.log("flush!");
     batchForFetch.push(...await DBCheckAndAdd(resolvedBatch));
-    //fetchBatch();
+    fetchBatch();
   
   })();
 
