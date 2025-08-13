@@ -1,6 +1,5 @@
 
 
-let cssLink;
 let filterModule;
 let IMGObs;
 let testcnt = 0;
@@ -8,6 +7,7 @@ let NoNSafeImgCount = 0;
 const dataBuffer = [];
 const MAX_N = 16, IDLE = 50;
 let idleT = null;
+let totalimg = 0;
 
 
 
@@ -29,6 +29,19 @@ if (window.top === window.self) {
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/**
+ * 
+ * @param {err} errMessage 
+ */
+function terminateContentScript(errMessage) {
+  if (/Extension context invalidated/i.test(errMessage)) console(" extension may be reloaded or disabled. so this contentscript can no longer be operated and will be termainated");
+  else{
+    console.error("!terminateContentScript becaouse this Error: ", errMessage," !");
+  }
+  if(IMGObs){
+    IMGObs.disconntectObeserver();
+  }
+}
 
 
 
@@ -43,47 +56,61 @@ function maybeFlush() {
 let ALLremoveFalse = 0;
 let ALLremoveTrue = 0;
 function Flush() {
-  
   if (!dataBuffer.length) return;
+  if (!chrome?.runtime) {
+    //함수 호출?
+    terminateContentScript('can not use chrome.runtime anymore. extension may be reloaded or disabled');
+  }
   const batchFromContentScript = dataBuffer.splice(0, dataBuffer.length).filter(item => document.querySelector(`img[data-img-id="${item.id}"]`)); // 0부터 dataBuffer.length번째 인덱스(전체)를 복사한 객체 반환 & 해당 크기만큼 기존 객체 내 원소 삭제 -> 0으로 초기화
-   chrome.runtime.sendMessage({
-      type: "imgDataFromContentScript",
-      data: batchFromContentScript, // 20개만 보내고, 배열은 자동으로 비움
-    },
-    function(response) {
-      const responseBatch = response.data; // 배열 [{ id, url, ... }, ...]
-      let removeFalse = 0;
-      let removeTrue = 0;
-      console.log("service worker 송신:"+batchFromContentScript.length+"--------------"+"수신"+responseBatch.length);
-      responseBatch.forEach(item => {
-        try{
-          const object= document.querySelector(`img[data-img-id="${item.id}"]`);
-          if(object){
-            removeTrue++;
-            // object.style.removeProperty('visibility');
-            // object.style.removeProperty('opacity');
   
-            object.classList.remove('imgMasking');
-            console.log("성공 id: "+ item.id);
-            object.style.border = "8px solid blue";
-            
+  try{
+    chrome.runtime.sendMessage({
+        type: "imgDataFromContentScript",
+        data: batchFromContentScript, // 20개만 보내고, 배열은 자동으로 비움
+      },
+      function(response) {
+        const err = chrome.runtime.lastError;
+        if(err){
+          terminateContentScript(err.message);
+          throw new Error('chrome.runtime 메세지 송신 중 오류 발생');
+        }
+  
+        const responseBatch = response.data; // 배열 [{ id, url, ... }, ...]
+        let removeFalse = 0;
+        let removeTrue = 0;
+        console.log("service worker 송신:"+batchFromContentScript.length+"--------------"+"수신"+responseBatch.length);
+        responseBatch.forEach(item => {
+          try{
+            const object= document.querySelector(`img[data-img-id="${item.id}"]`);
+            if(object){
+              removeTrue++;
+              // object.style.removeProperty('visibility');
+              // object.style.removeProperty('opacity');
+    
+              object.classList.remove('imgMasking');
+              console.log("성공 id: "+ item.id);
+              object.style.border = "8px solid blue";
+              
+            }
+            else{
+              removeFalse=removeFalse+1;
+              console.log("실패 id: "+ item.id);
+            }
           }
-          else{
-            removeFalse=removeFalse+1;
-            console.log("실패 id: "+ item.id);
+          catch(e){
+            throw new Error("응답 데이터 마스킹 해제 중에 오류 발생: "+ e.message);
           }
         }
-        catch(e){
-          console.log("마스킹 해제 중에 오류 발생: "+ e);
-        }
-      }
-    ); 
-    ALLremoveFalse += removeFalse;
-    ALLremoveTrue += removeTrue;
-    console.log("합계: 실패: "+removeFalse+"/성공: "+ removeTrue);
-    console.log("누적 합계: 실패: "+ALLremoveFalse+"/성공: "+ ALLremoveTrue);
-    console.log("성공률: " + (ALLremoveTrue/(ALLremoveFalse+ ALLremoveTrue)).toFixed(2));
-    })
+      ); 
+      ALLremoveFalse += removeFalse;
+      ALLremoveTrue += removeTrue;
+      console.log("합계: 실패: "+removeFalse+"/성공: "+ removeTrue);
+      console.log("누적 합계: 실패: "+ALLremoveFalse+"/성공: "+ ALLremoveTrue);
+      console.log("성공률: " + (ALLremoveTrue/(ALLremoveFalse+ ALLremoveTrue)).toFixed(2));
+      })
+  } catch(e){
+    console.error("erorr occured durring sending message with service worker:  ", e.message);
+  }
 }
 
 
@@ -137,7 +164,7 @@ function checkConditionAndSend (img, type) {
     return;
   }
   img.classList.add(type); //static | dynamic img
-  dataBuffer.push({ id: img.dataset.imgId, url: absUrl.toString(), harmful: false, response: false });
+  dataBuffer.push({ id: img.dataset.imgId, url: absUrl.toString(), harmful: false, status: false });
   maybeFlush();
 
 }
@@ -226,6 +253,8 @@ class imageObservers {
         }
     
       });
+      totalimg += elements.length;
+      console.log("total IMG: ", totalimg);
       elements.forEach(el => {
         requestAnimationFrame(() => {
           el.classList.add('imgMasking');//다음 렌더 사이클에서 마스킹
@@ -244,6 +273,12 @@ class imageObservers {
     
     });
   }
+
+  disconntectObeserver() {
+    this.imgObserve.disconnect();
+    this.imgViewObserver.disconnect();
+  }
+
 }  
 console.log("테스트");
 

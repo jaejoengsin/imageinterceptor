@@ -1,12 +1,10 @@
 
-import {filter_based_safeUrlPattern} from '/test/url_compare&image_tracking/url_filterModule_based_safe_pattern.js';
-
-
+  
 const dataBuffer = [];
 const MAX_N = 16, IDLE = 50;
 let idleT = null
 let testcnt = 0;
-let NoNSafeImgCount = 0;
+
 
 //setInterval(() => { console.log(document.readyState); }, 1000);
 
@@ -42,9 +40,6 @@ let NoNSafeImgCount = 0;
 
 
 
-
-
-
 function maybeFlush() {
   if (dataBuffer.length >= MAX_N) Flush();
   clearTimeout(idleT);
@@ -68,7 +63,7 @@ function Flush() {
 //상대경로 -> 절대경로
 function toAbsoluteUrl(url, baseUrl = document.baseURI) {
   try {
-    return new URL(url, baseUrl);
+    return new URL(url, baseUrl).toString();
   } catch {
     return url;
   }
@@ -80,24 +75,14 @@ function maskAndSend (img, type) {
   if (img.classList.contains('imgMasking')) return; //masking 상태에서 같은 객체의 src가 또 바뀔 수도 있는데 이 경우에는 무시될 수 밖에 없음. 이 경우에 대해 큰 문제가 발생하면 코드 수정 검토
   const url = img.currentSrc || img.src;
   if (!url || url === '') return;          // 빈 URL 걸러냄
-  console.log("currentSrc: " +img.currentSrc +  "src: "+ img.src);
-  let absUrl;
-  try{
-    absUrl = toAbsoluteUrl(url, document.baseURI );
-  } catch(e){
-    console.error("URL 정규화 과정 중에 에러 발생 - ", e);
-    return;
+  if(img.currentSrc!=img.src){
+    console.log("currentSrc: " +img.currentSrc +  "src: "+ img.src);
   }
-  if(filter_based_safeUrlPattern(absUrl)){
-    NoNSafeImgCount++;
-    img.dataset.imgId = "NOTHARMFUL";
-    console.log("비유해 이미지:",absUrl.toString()," 총합:",NoNSafeImgCount);
-    return;
-  }
+  absUrl = toAbsoluteUrl(url, baseURI = document.baseURI );
   img.classList.add("imgMasking", type); //일단은 static 이미지는 static이라고 클래스에 명시. 현재는 클래스 사용. 나중에 필요하면 새로운 속성을 추가하는 식으로 바꿀수도
   const uuid = crypto.randomUUID();
   img.dataset.imgId = uuid;
-  dataBuffer.push({id: uuid, url: absUrl.toString(), harmful: false, response: false });
+  dataBuffer.push({id: uuid, url: absUrl, harmful: false, response: false });
   maybeFlush();
   // generateSHA256(img.src).then(hash => {
   //   dataBuffer.push({ id: hash, url: img.src, harmful: false, sended: false });
@@ -127,36 +112,35 @@ function maskAndSend (img, type) {
 
 
 
-// const imgSrcObject = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
-// if (!imgSrcObject || !imgSrcObject.set)
-//   console.log(imgSrcObject+"src 속성을 불러오지 못했습니다");
+const imgSrcObject = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+if (!imgSrcObject || !imgSrcObject.set)
+  console.log(imgSrcObject+"src 속성을 불러오지 못했습니다");
 
 
-// HTMLImageElement.prototype.__imgInterceptor = false;   // flag
+HTMLImageElement.prototype.__imgInterceptor = false;   // flag
 
-// if (!HTMLImageElement.prototype.__imgInterceptor) {
-//   Object.defineProperty(HTMLImageElement.prototype, 'src', {
-//   configurable: true, //프로퍼티 삭제 및 변경 가능 여부
-//   enumerable: imgSrcObject.enumerable, //for...in 등 열거 가능 여부
-//   get: imgSrcObject.get,
-//   set: function (url) {
-//     imgSrcObject.set.call(this, url); //후킹하기 전에 보관해 둔 기존 src 세터를 호출하여  <img> 요소를 this로, 새 URL을 인수로 넘겨서 정상적인 컨텍스트로 실행 -> 원본 이미지 다운로드
-//     if(!this.dataset.imgID){    
-//       const hasSrcSet = !!this.getAttribute('srcset');
-//       if(hasSrcSet){
-//         checkCurrentSrc(this, htmlImgElement => {
-//                 maskAndSend(htmlImgElement, 'dynamicIMG');
-//               } );
-//       }
-//       else
-//       {
-//         maskAndSend(this,"dynamicIMG");
-//       }
-//   }
-//   }
-// });
-//   HTMLImageElement.prototype.__imgInterceptor = true;   // flag
-// }
+if (!HTMLImageElement.prototype.__imgInterceptor) {
+  Object.defineProperty(HTMLImageElement.prototype, 'src', {
+  configurable: true, //프로퍼티 삭제 및 변경 가능 여부
+  enumerable: imgSrcObject.enumerable, //for...in 등 열거 가능 여부
+  get: imgSrcObject.get,
+  set: function (url) {
+    imgSrcObject.set.call(this, url); //후킹하기 전에 보관해 둔 기존 src 세터를 호출하여  <img> 요소를 this로, 새 URL을 인수로 넘겨서 정상적인 컨텍스트로 실행 -> 원본 이미지 다운로드
+    const hasSrcSet = !!this.getAttribute('srcset');
+    if(hasSrcSet){
+       checkCurrentSrc(this, htmlImgElement => {
+              maskAndSend(htmlImgElement, 'dynamicIMG');
+            } );
+    }
+    else
+    {
+      maskAndSend(this,"dynamicIMG");
+    }
+
+  }
+});
+  HTMLImageElement.prototype.__imgInterceptor = true;   // flag
+}
 
 
 

@@ -2,7 +2,7 @@
 //data url(base64), blob data, url 끝에 붙는 확장자, CSS 스프라이트
 const protoData   = new URLPattern({ protocol: 'data'   });
 const protoBlob   = new URLPattern({ protocol: 'blob'   });
-const extPattern  = new URLPattern({ pathname: '*.{svg,svgz,ico,cur,png}' });
+const extPattern  = new URLPattern({ pathname: '/*. :ext(svg|svgz|ico|cur|png)' });
 const spritePat   = new URLPattern({ pathname: '*sprite*.{avif,webp}' });
 
 //키워드

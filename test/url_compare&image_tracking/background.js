@@ -7,6 +7,7 @@ import * as URLJs from './utils/normalize-url-main/index.js'
 
 const batchForDB = [];
 const batchForFetch = [];
+const CsBatchForWaiting = new Map();
 const BATCH_LIMIT = 16;
 const BATCH_LIMIT_FOR_FETCH = 16;
 const IDLEForDB = 20;
@@ -21,6 +22,7 @@ let keySet = null;
 let keySetLoaded = false;
 let flushPromise = null;
 let fetchPromise = null;
+let totalimg = 0;
 
 
 /*
@@ -221,41 +223,78 @@ if(URlReloadTest){
   }, 2000);
 }
 
-async function onlyCheck(batch) {
+async function checkCsData(batch) {
   if (!keySetLoaded) await loadKeySet(DB);
   if(!DB){
     console.error("error from DBCheckAndAdd:DB가 준비되지 않았음.");
     return;
   }
-  const resolvedBatch = await Promise.all(
+
+  const tx = DB.transaction('imgURL', 'readonly');
+  const store = tx.objectStore('imgURL'); 
+  const csBatchForFetch = [];
+  const csBatchForResponse = [];
+  
+  csBatchForResponse = await Promise.all(
+ 
     batch.map(async (item) => {
       try {
-        // console.log(item.url);
-        //canonicalUrl = await canonicalizeImageUrl(item.url); 정규화 과정에서 지속적인 오류 발생으로 일단 제외
-        // console.log("정규화url" + canonicalUrl);
+
         if(keySet.has(item.url)){
-          //console.log("일치하는 url있음");
-          return item;
+
+          const value = new Promise ((resolve, reject) => {
+            const request = store.get(item.url);
+            request.onsuccess = (event) => {
+              resolve(event.target.result);
+            }
+            request.onerror = (event) => {
+              reject(event.target.error);
+            }
+          }).then(result => {
+            console.log("table에서 key 조회하고 value 가져오기 성공");
+            return result;
+          }).catch(error => {
+            console.error("table에서 key 조회하고 value 가져오는 중에 Error 발생:", error);
+          });
+
+          if(!value.response) {
+            CsBatchForWaiting.set(item.url,item);
+          }
+          else {
+
+            if(value.status){
+              item.status = true;
+              if(value.harmful){
+                item.harmful = true;
+              }
+            }
+            return item;
+
+          }
         }
         else{
+
           const cachCheck = await caches.match(item.url);
+
           if(cachCheck){
-            //console.log("cach 확인 결과, 일치하는 url있음");
+            console.log("cach 확인 결과, 일치하는 url있음");
+            //현재 이 부분이 제대로 동작하는지, 유효성이 있는지 잘 모르겠음. 
+            //만약에 cach가 존재한다면 db에 해당 이미지 데이터 추가, 그리고 
+            //csBatchForResponse에도 추가
           }
           else{
               //console.log("못찾음: " + item.url);
               waiting.push(item.url);
+              csBatchForFetch.push(item);
             }
           
         }
       } catch (e) {
-        //console.log(item.url+" <-이미지 비교중 에러");
+        console.log("이미지 비교중 에러: ", e, "\nURL: ",item.url);
       }
-    }).filter(item => item !== undefined)
-  );
-  //console.log(batch);
-  //console.log(resolvedBatch);
-  return resolvedBatch;
+    }));
+
+  return csBatchForResponse;
 }
 
 
@@ -276,6 +315,7 @@ async function maybeDBFlush() {
 }
 
 
+
 async function maybeFetch() {
   console.log("maybefetch! |  현재 fetch 예정 data 수: "+batchForFetch.length);
   if(batchForFetch.length >=BATCH_LIMIT_FOR_FETCH) {
@@ -288,8 +328,25 @@ async function maybeFetch() {
   clearTimeout(idleTForFetch);
   idleTForFetch = setTimeout(fetchBatch, IDLEFORFETCH);
 }
+/*
+1.기다리고 있던 콘텐츠 스크립트 대기 데이터에 반영
+2. DB 업데이트 
+  */
 
-  
+async function propagateResBodyData(responseData) {
+  const readyToSend = [];
+  for (const [url, imgData] of CsBatchForWaiting){
+    if(responseData.has(url)) {
+      const imgResData = responseData.get(url);
+      imgData.status = imgResData.status;
+      imgData.harmful = imgResData.harmful;
+      readyToSend.push(imgData);
+      CsBatchForWaiting.delete(url);
+    }
+  }
+  //contentscript와 runtimemessage 교신
+  //db 연결 후에 responseData update
+}
 async function  fetchBatch() {
     try {
       if(batchForFetch.length === 0) {
@@ -299,15 +356,18 @@ async function  fetchBatch() {
       const bodyData = JSON.stringify(fetchData);
       const start = performance.now();
       console.log("fetch!: ",fetchData.data.length);
-      const res =  await fetch("https://imageinterceptor-api-683857194699.asia-northeast3.run.app/analyze", {
+      const res =  await fetch("https://image-interceptor-683857194699.asia-northeast3.run.app/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: bodyData
       });
-
       if(!res.ok) throw new Error("서버 응답 오류");// catch로 이동
-      //const responseBodyData = res.json();
-       console.log(`response delaytime: ${(performance.now()-start)/1000}`);
+      console.log(`response delaytime: ${(performance.now()-start)/1000}`);
+      const responseBodyData = await res.json().then(result=>
+        {return result.data});
+      propagateResBodyData(new Map(responseBodyData.map((el)=>{
+        return [el.url,{url: el.url, status: el.status, harmful: el.harmuful}];
+      })));
     } catch(err){
        console.error(
         err instanceof SyntaxError
@@ -316,9 +376,41 @@ async function  fetchBatch() {
       );
     } 
 }
-
-
-
+/*
+RESPONSE DATA example
+{
+    "data": [
+        {
+            "canonicalUrl": "https://www.google.com/pagead/1p-user-list/962985656/?backend=innertube&cname=1&cver=2_20250807&data=backend%3Dinnertube%3Bcname%3D1%3Bcver%3D2_20250807%3Bel%3Dadunit%3Bptype%3Df_adview%3Btype%3Dview%3Butuid%3Dtdz9LWNNQKUg4Xpma_40Ug%3Butvid%3D4ByJ0z3UMNE&is_vtc=0&ptype=f_adview&random=428766496&utuid=tdz9LWNNQKUg4Xpma_40Ug",
+            "url": "https://www.google.com/pagead/1p-user-list/962985656/?backend=innertube&cname=1&cver=2_20250807&data=backend%3Dinnertube%3Bcname%3D1%3Bcver%3D2_20250807%3Bel%3Dadunit%3Bptype%3Df_adview%3Btype%3Dview%3Butuid%3Dtdz9LWNNQKUg4Xpma_40Ug%3Butvid%3D4ByJ0z3UMNE&is_vtc=0&ptype=f_adview&random=428766496&utuid=tdz9LWNNQKUg4Xpma_40Ug",
+            "status": true,
+            "harmful": false,
+            "category": "medical",
+            "score": 0.4,
+            "details": {
+                "adult": 1,
+                "spoof": 1,
+                "medical": 2,
+                "violence": 2,
+                "racy": 2
+            },
+            "processed": true,
+            "error": false,
+            "error_message": null,
+            "error_type": null
+        }
+    ],
+    "summary": {
+        "total": 1,
+        "processed": 1,
+        "harmful": 0,
+        "safe": 1,
+        "errors": 0,
+        "error_types": {}
+    },
+    "message": "총 1개 이미지 중 1개 처리 완료 (배치 API 호출: 1회로 1개 이미지 동시 처리)"
+}
+*/
 
 
 async function flushBatch() {
@@ -349,6 +441,7 @@ async function flushBatch() {
     ).catch(()=>{console.log("총 실패한 데이터 수:" + errorCount)});
     console.log("flush!");
     batchForFetch.push(...await DBCheckAndAdd(resolvedBatch));
+    
     fetchBatch();
   
   })();
@@ -386,8 +479,9 @@ chrome.tabs.onActivated.addListener(({ tabId }) => {
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
     if (details.type === "image" && details.tabId >= 0) {
-
       eventListner.push(details.url);
+      totalimg+=1;
+      console.log("totalimg:",totalimg);
       storeImage( details.tabId, details.url);
 
     }  
