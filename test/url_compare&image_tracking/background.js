@@ -71,6 +71,7 @@ function getAllKeysPromise(store) {
   });
 }
 
+
 async function loadKeySet() {
   const tx = DB.transaction('imgURL', 'readonly');
   const store = tx.objectStore('imgURL'); 
@@ -81,6 +82,22 @@ async function loadKeySet() {
   console.log(keySet.size);
   keySetLoaded = true;
 } 
+
+/**
+ * 
+ * @param {Object} tableMethodResult table에 get,put 등 비동기 요청의 반환값  
+ */
+
+function reqTablePromise(tableMethodResult) {
+  return new Promise((resolve, reject) => {
+    tableMethod.onsuccess = (event) => {
+      resolve(event.target.result);
+    }
+    tableMethod.onerror = (event) => {
+      reject(event.target.error);
+    }
+  });
+}
 
 
 
@@ -103,7 +120,6 @@ let PromiseForInit = (async () => {
 
 
 //이미지 url fetch
-
 
 
 
@@ -145,8 +161,9 @@ async function DBCheckAndAdd(batch) {
         canonicalUrl:item.canonicalUrl,
         url: item.url,
         domain: (new URL(item.url)).hostname.replace(/^www\./, '') ,//수정예정,
-        harmful: false,   // 기본값
+        response: false,
         status: false,   // 검사완료
+        harmful: false,   // 기본값
       });     // DB에 저장
       keySet.add(item.canonicalUrl); // 중복 방지
     }
@@ -242,15 +259,7 @@ async function checkCsData(batch) {
 
         if(keySet.has(item.url)){
 
-          const value = new Promise ((resolve, reject) => {
-            const request = store.get(item.url);
-            request.onsuccess = (event) => {
-              resolve(event.target.result);
-            }
-            request.onerror = (event) => {
-              reject(event.target.error);
-            }
-          }).then(result => {
+          const value = await reqTablePromise(store.get(item.url)).then(result => {
             console.log("table에서 key 조회하고 value 가져오기 성공");
             return result;
           }).catch(error => {
@@ -299,14 +308,13 @@ async function checkCsData(batch) {
 
 
 
+
 async function DBFlushByIDLE () {
   await flushBatch();
   if(mustFlush) {
     await fetchBatch();
   };
 }
-
-
 async function maybeDBFlush() {
   console.log("limit: "+BATCH_LIMIT+ " batch length: "+batchForDB.length);
   if (batchForDB.length >= BATCH_LIMIT) await flushBatch();
@@ -328,10 +336,39 @@ async function maybeFetch() {
   clearTimeout(idleTForFetch);
   idleTForFetch = setTimeout(fetchBatch, IDLEFORFETCH);
 }
-/*
-1.기다리고 있던 콘텐츠 스크립트 대기 데이터에 반영
-2. DB 업데이트 
-  */
+
+
+
+async function updateDB(responseData) {
+  const tx = DB.transaction('imgURL', 'readowrite');
+  const store = tx.objectStore('imgURL'); 
+
+  for (const [url, imgResData] of responseData.values()) {
+    const dbValue =  await reqTablePromise(store.get(url)).then(result => {
+        console.log("table에서 key 조회하고 value 가져오기 성공");
+        return result;
+      }).catch(error => {
+        console.error("table에서 key 조회하고 value 가져오는 중에 Error 발생:", error);
+      });
+      dbValue = {...imgResData};
+      await reqTablePromise(store.put(url));
+  }
+
+  //tx 완료 기달릴 필요 x?...
+  
+}
+
+
+async function sendWaitingCsDataToCs(readyData){
+  const answer = await  chrome.runtime.sendMessage({
+        type: "imgDataWaitingFromServiceWork",
+        data: readyData, // 20개만 보내고, 배열은 자동으로 비움
+    },function(response){
+      //ok flag return 
+    });
+  return answer;
+}
+
 
 async function propagateResBodyData(responseData) {
   const readyToSend = [];
@@ -344,8 +381,11 @@ async function propagateResBodyData(responseData) {
       CsBatchForWaiting.delete(url);
     }
   }
-  //contentscript와 runtimemessage 교신
-  //db 연결 후에 responseData update
+
+  
+  sendWaitingCsDataToCs(readyToSend).then(res => { console.log("response status(WaitingCsData Sended): ", res); });//contentscript와 runtimemessage 교신
+  updateDB(responseData);
+
 }
 async function  fetchBatch() {
     try {
@@ -366,7 +406,7 @@ async function  fetchBatch() {
       const responseBodyData = await res.json().then(result=>
         {return result.data});
       propagateResBodyData(new Map(responseBodyData.map((el)=>{
-        return [el.url,{url: el.url, status: el.status, harmful: el.harmuful}];
+        return [el.url,{url: el.url, response: true, status: el.status, harmful: el.harmuful}];
       })));
     } catch(err){
        console.error(
@@ -492,30 +532,8 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  const batchFromPage = message.data;
-  //console.log(batchFromPage);
-  //console.log("서비스 워커 수신 data: " + batchFromPage.length);
-  // sendResponse({
-  //       type: "response",
-  //       data: batchFromPage, // 20개만 보내고, 배열은 자동으로 비움
-  //     });
-  if (message?.type === "imgDataFromPage") {
-    if(sender.tab.id )
-     onlyCheck(message.data).then(batchFromPage => {
-      sendResponse({
-        type: "response",
-        data: batchFromPage, // 20개만 보내고, 배열은 자동으로 비움
-      });
-    });
-    return true;
-  }
-});
-
-
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "imgDataFromContentScript") {
-     onlyCheck(message.data).then(batchFromScript => {
+     checkCsData(message.data).then(batchFromScript => {
       sendResponse({
         type: "response",
         data: batchFromScript, 
