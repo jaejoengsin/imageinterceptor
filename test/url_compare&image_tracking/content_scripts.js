@@ -78,24 +78,65 @@ function Flush() {
         const responseBatch = response.data; // 배열 [{ id, url, ... }, ...]
         let removeFalse = 0;
         let removeTrue = 0;
+        let totalStatus = 0;
+        let succeedStatus = 0;
+        let isHarmful = 0;
         console.log("service worker 송신:"+batchFromContentScript.length+"--------------"+"수신"+responseBatch.length);
         responseBatch.forEach(item => {
+
+          totalStatus++;
+
           try{
-            const object= document.querySelector(`img[data-img-id="${item.id}"]`);
-            if(object){
-              removeTrue++;
-              // object.style.removeProperty('visibility');
-              // object.style.removeProperty('opacity');
+            if(item.status){
+
+              succeedStatus++;
+
+              if(item.harmful){
+                isHarmful++;
+              }
+              
+              else{
+                
+                const object= document.querySelector(`img[data-img-id="${item.id}"]`);
+  
+                if(object){
+                  
+                  removeTrue++;
+                  // object.style.removeProperty('visibility');
+                  // object.style.removeProperty('opacity');
     
-              object.classList.remove('imgMasking');
-              console.log("성공 id: "+ item.id);
-              object.style.border = "8px solid blue";
+                  object.classList.remove('imgMasking');
+                  console.log("성공 id: "+ item.id);
+                  object.style.border = "8px solid blue";
+                  
+                }
+                else{
+                  removeFalse=removeFalse+1;
+                  console.log("실패 id: "+ item.id);
+                }
+
+              }
               
             }
-            else{
-              removeFalse=removeFalse+1;
-              console.log("실패 id: "+ item.id);
-            }
+          else {
+
+              const object = document.querySelector(`img[data-img-id="${item.id}"]`);
+              if (object) {
+                removeTrue++;
+                // object.style.removeProperty('visibility');
+                // object.style.removeProperty('opacity');
+
+                object.classList.remove('imgMasking');
+                console.log("성공 id: " + item.id);
+                object.style.border = "8px solid blue";
+
+              }
+              else {
+                removeFalse = removeFalse + 1;
+                console.log("실패 id: " + item.id);
+              }
+              
+          }
           }
           catch(e){
             throw new Error("응답 데이터 마스킹 해제 중에 오류 발생: "+ e.message);
@@ -104,9 +145,9 @@ function Flush() {
       ); 
       ALLremoveFalse += removeFalse;
       ALLremoveTrue += removeTrue;
-      console.log("합계: 실패: "+removeFalse+"/성공: "+ removeTrue);
-      console.log("누적 합계: 실패: "+ALLremoveFalse+"/성공: "+ ALLremoveTrue);
-      console.log("성공률: " + (ALLremoveTrue/(ALLremoveFalse+ ALLremoveTrue)).toFixed(2));
+        console.log(`서비스 워커 응답 이미지 결과: ${totalStatus}/${succeedStatus}/${(totalStatus - succeedStatus )}/${isHarmful}[총합/이미지 분석 성공/이미지 분석 실패/유해이미지]`);
+      console.log(`마스킹 해제 결과: ${totalStatus}/${removeTrue}/${removeFalse}/${isHarmful}[총합/성공/실패/유해이미지]`);
+      console.log(`누적 합계: ${ALLremoveTrue}/${ALLremoveFalse}/${(ALLremoveTrue + ALLremoveFalse)}[누적 성공/누적 실패/총 누적 합] | 성공률: ${(ALLremoveTrue / (ALLremoveFalse + ALLremoveTrue)).toFixed(2) }`);
       })
   } catch(e){
     console.error("erorr occured durring sending message with service worker:  ", e.message);
@@ -337,3 +378,91 @@ else {
   pageInit();
 }
 
+
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!들어왔당께");
+  if (message.type === "imgDataWaitingFromServiceWork") {
+    try {
+     const responseWaitingDataInServiceWorking = message.data;
+      let removeFalse = 0;
+      let removeTrue = 0;
+      let totalStatus = 0;
+      let succeedStatus = 0;
+      let isHarmful = 0;
+
+      console.log("service work에서 서버의 유해 이미지 분석 결과를 기다리던 Data: " + responseWaitingDataInServiceWorking.length);
+      responseWaitingDataInServiceWorking.forEach(item => {
+
+      totalStatus++;
+
+      try {
+        if (item.status) {
+
+          succeedStatus++;
+
+          if (item.harmful) {
+            isHarmful++;
+          }
+
+          else {
+
+            const object = document.querySelector(`img[data-img-id="${item.id}"]`);
+
+            if (object) {
+
+              removeTrue++;
+              // object.style.removeProperty('visibility');
+              // object.style.removeProperty('opacity');
+
+              object.classList.remove('imgMasking');
+              console.log("성공 id: " + item.id);
+              object.style.border = "8px solid blue";
+
+            }
+            else {
+              removeFalse = removeFalse + 1;
+              console.log("실패 id: " + item.id);
+            }
+
+          }
+
+        }
+        else {
+
+          const object = document.querySelector(`img[data-img-id="${item.id}"]`);
+          if (object) {
+            removeTrue++;
+            // object.style.removeProperty('visibility');
+            // object.style.removeProperty('opacity');
+
+            object.classList.remove('imgMasking');
+            console.log("성공 id: " + item.id);
+            object.style.border = "8px solid blue";
+
+          }
+          else {
+            removeFalse = removeFalse + 1;
+            console.log("실패 id: " + item.id);
+          }
+
+        }
+      }
+      catch (e) {
+        throw new Error("응답 데이터 마스킹 해제 중에 오류 발생: " + e.message);
+      }
+    }
+    );
+    ALLremoveFalse += removeFalse;
+    ALLremoveTrue += removeTrue;
+    console.log(`서비스 워커 응답 이미지 결과: ${totalStatus}/${succeedStatus}/${(totalStatus - succeedStatus)}/${isHarmful}[총합/이미지 분석 성공/이미지 분석 실패/유해이미지]`);
+    console.log(`마스킹 해제 결과: ${totalStatus}/${removeTrue}/${removeFalse}/${isHarmful}[총합/성공/실패/유해이미지]`);
+    console.log(`누적 합계: ${ALLremoveTrue}/${ALLremoveFalse}/${(ALLremoveTrue + ALLremoveFalse)}[누적 성공/누적 실패/총 누적 합] | 성공률: ${(ALLremoveTrue / (ALLremoveFalse + ALLremoveTrue)).toFixed(2)}`);
+    sendResponse({
+      type: "response",
+      ok: true,
+    });
+  }catch(e){
+    console("error ocurr[ =while confirming waiting data from service worker]", e);
+  }};
+});
