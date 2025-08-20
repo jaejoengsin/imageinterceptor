@@ -90,14 +90,31 @@ function Flush() {
             if(item.status){
 
               succeedStatus++;
+              const object = document.querySelector(`img[data-img-id="${item.id}"]`);
 
-              if(item.harmful){
+              if (item.harmful) {
+                if (object) {
+
+                  removeTrue++;
+                  // object.style.removeProperty('visibility');
+                  // object.style.removeProperty('opacity');
+
+                  object.classList.add("harmful");
+                  console.log("유해 이미지: " + item.url);
+                  object.style.border = "8px solid red";
+
+                }
+                else {
+                  removeFalse = removeFalse + 1;
+                  console.log("실패 id: " + item.id);
+              }
+
                 isHarmful++;
               }
               
               else{
                 
-                const object= document.querySelector(`img[data-img-id="${item.id}"]`);
+            
   
                 if(object){
                   
@@ -398,16 +415,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       try {
         if (item.status) {
-
+          const object = document.querySelector(`img[data-img-id="${item.id}"]`);
           succeedStatus++;
 
           if (item.harmful) {
+            if (object) {
+
+              removeTrue++;
+              // object.style.removeProperty('visibility');
+              // object.style.removeProperty('opacity');
+
+              object.classList.add("harmful");
+              console.log("유해 이미지: " + item.url);
+              object.style.border = "8px solid red";
+
+            }
+            else {
+              removeFalse = removeFalse + 1;
+              console.log("실패 id: " + item.id);
+            }
+
+
             isHarmful++;
           }
 
           else {
 
-            const object = document.querySelector(`img[data-img-id="${item.id}"]`);
 
             if (object) {
 

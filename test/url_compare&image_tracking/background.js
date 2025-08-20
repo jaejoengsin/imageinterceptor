@@ -49,14 +49,19 @@ function openImageUrlDB() {
       //keyPath는 저장하는 각 객체에서 기본키로 사용할 속성 이름
       const db = event.target.result;
       // images objectStore 생성, keyPath는 canonicalUrl로!
+    
       if (!db.objectStoreNames.contains('imgURL')) {
-        db.createObjectStore('imgURL', { keyPath: 'canonicalUrl' });
+        
+        db.createObjectStore('imgURL', { keyPath: 'url' });
       }
     };
     request.onsuccess = (event) => {
+
       resolve(event.target.result); // promise value에 db 인스턴스 반환값 저장
     };
+
     request.onerror = (event) => {
+
       reject(event.target.error); // promise reason에 event.target.error 저장
     };
   });
@@ -83,7 +88,7 @@ async function loadKeySet() {
   keySetLoaded = true;
 } 
 
-/**
+/**ㄸ
  * 
  * @param {Object} tableMethodResult table에 get,put 등 비동기 요청의 반환값  
  */
@@ -106,6 +111,7 @@ let PromiseForInit = (async () => {
   try{
   DB = await openImageUrlDB();
   await loadKeySet(DB);
+  console.log("db로드완료");
   }
   catch(e){
     console.log("서비스워커 초기화 중에 에러 발생:"+e);
@@ -121,39 +127,48 @@ async function DBCheckAndAdd(batch) {
     return;
   }
 
-  const tx = DB.transaction('imgURL', 'readwrite');
-  const store = tx.objectStore('imgURL');
+ 
   
   const laterToFetch = [];
   const firstToFetch = [];
+  const imagesNotInDB = [];
 
   for (const item of batch) {
     if (!keySet.has(item.canonicalUrl)) { // fetch 대상(아직 없음)
+      let pureBase64;
+
+      try{
+        pureBase64 = await fetchAndReturnBase64Img(item.url);
+      }catch(err){
+        console.log("error while making base64: ",err);}
+      
+
       if(currentTab == item.tabId){
         firstToFetch.push(	{
-          canonicalUrl:item.canonicalUrl,
           url:item.url,
+          content: pureBase64,
           status: false,
           harmful:false});
           //console.log("firsttofetch!"+firstToFetch.length);
         }
       else{
         laterToFetch.push(	{
-          canonicalUrl:item.canonicalUrl,
           url:item.url,
+          content: pureBase64,
           status: false,
           harmful:false}); 
           //console.log("latertofetch!"+laterToFetch.length);
         }
-      store.put({
-        canonicalUrl:item.canonicalUrl,
-        url: item.url,
-        domain: (new URL(item.url)).hostname.replace(/^www\./, '') ,//수정예정,
-        response: false,
-        status: false,   // 검사완료
-        harmful: false,   // 기본값
-      });     // DB에 저장
-      keySet.add(item.canonicalUrl); // 중복 방지
+      imagesNotInDB.push(
+        {
+          url: item.url,
+          domain: (new URL(item.url)).hostname.replace(/^www\./, ''),//수정예정,
+          response: false,
+          status: false,   // 검사완료
+          harmful: false,   // 기본값
+        }
+      );
+      keySet.add(item.url); // 중복 방지
     }
   else {
     
@@ -166,8 +181,8 @@ async function DBCheckAndAdd(batch) {
     if(!DBimgvalue.response){
       if (currentTab == item.tabId) {
         firstToFetch.push({
-          canonicalUrl: item.canonicalUrl,
           url: item.url,
+          content: pureBase64,
           status: false,
           harmful: false
         });
@@ -175,8 +190,8 @@ async function DBCheckAndAdd(batch) {
       }
       else {
         laterToFetch.push({
-          canonicalUrl: item.canonicalUrl,
           url: item.url,
+          content: pureBase64,
           status: false,
           harmful: false
         });
@@ -186,6 +201,14 @@ async function DBCheckAndAdd(batch) {
     }
     //있으나, response가 true가 아니라면 재요청(서버로부터 요청을 보냈지만 응답을 받기 전에 비정상적인 종료가 되었다고 가정);
   }
+
+  const tx = DB.transaction('imgURL', 'readwrite');
+  const store = tx.objectStore('imgURL');
+
+
+  imagesNotInDB.forEach(imgData=>{
+    store.put(imgData);     // DB에 저장
+  });
   await tx.done?.(); // 일부 브라우저에선 필요 없음
   
   firstToFetch.unshift(...laterToFetch);
@@ -194,44 +217,6 @@ async function DBCheckAndAdd(batch) {
   return firstToFetch;        
 }
 
-
-
-/*
-sortQueryParameters: true	파라미터 키를 알파벳 순으로 정렬하여 일관된 비교 문자열 생성 
-removeQueryParameters: [/^utm_/, /^fbclid$/]	utm_*, fbclid 등의 추적 파라미터 제거
-stripHash: true	URL의 #fragment 전체 삭제
-stripTextFragment: true	텍스트 해시 (#:~:text=)까지 제거
-stripWWW: true	www. 접두사 제거로 www 유무 차이 무시
-removeTrailingSlash: true	경로 끝의 / 제거하여 /img와 /img/ 통일
-normalizeProtocol: true	http://와 https:// 일관성 유지(기본값)
-*/
-/////////////////////////////////////////// <- 현재는 잦은 오류 발생으로 안쓰는 코드임
-function isLikelyQueryString(url) {
-  // path에만 '='이 있고, '?'가 없음
-  const result = new URL(url);
-  return !!result.search;
-}
-async function canonicalizeImageUrl(rawUrl) {
-  if (isLikelyQueryString(rawUrl)) {
-    return await URLJs.default(rawUrl, {
-      sortQueryParameters: true,
-      removeQueryParameters: [/^utm_/, /^fbclid$/],
-      stripHash: true,
-      stripTextFragment: true,
-      stripWWW: true,
-      removeTrailingSlash: true,
-      normalizeProtocol: true,
-    });
-  } else {
-    // 오타 수정: defaultl → default, url → rawUrl
-    return await URLJs.default(rawUrl, {
-      stripWWW: true,
-      removeTrailingSlash: true,
-      normalizeProtocol: true,
-    });
-  }
-}
-/////////////////////////////////////////// 
 
 
 
@@ -425,6 +410,41 @@ async function sendWaitingCsDataToCs(readyData){
 }
 
 
+/////실험 함수
+// Blob을 Base64 문자열로 변환하는 헬퍼 함수
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(blob); // Blob을 읽어 Base64 데이터 URI로 변환 시작
+    reader.onloadend = () => {
+      resolve(reader.result); // 변환 완료 시 Base64 문자열 반환
+    };
+    reader.onerror = (error) => {
+      reject(error); // 에러 발생 시 거부
+    };
+  });
+}
+
+
+/////
+async function fetchAndReturnBase64Img(url){
+  return new Promise(async (resolve, reject) => {
+    try{
+
+      const res = await fetch(url);
+      const resBlob = await res.blob();
+      const Base64 = await blobToBase64(resBlob).then(resNotFilterd => { return resNotFilterd.split(',')[1];});
+      return resolve(Base64);
+
+    } catch(error){
+
+      return reject(error);
+    };
+
+  });
+}
+
+
 async function propagateResBodyData(responseData) {
   const readyToSend = new Map(); // tabid : [imgData, ....]
 
@@ -457,19 +477,22 @@ async function  fetchBatch() {
       if(batchForFetch.length === 0) {
         console.log("No fetchData");
         return;}
-      const fetchData = { data:batchForFetch.splice(0,16)}; 
+      const fetchData = { data:batchForFetch.splice(0,16)}; //
+      console.log("fetchdata:"+fetchData.length);
       const bodyData = JSON.stringify(fetchData);
+
       const start = performance.now();
       console.log("fetch!: ",fetchData.data.length);
-      const res =  await fetch("https://image-interceptor-683857194699.asia-northeast3.run.app/analyze", {
+      const res =  await fetch("https://image-interceptor-test-683857194699.asia-northeast3.run.app", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: bodyData
       });
       if(!res.ok) throw new Error("서버 응답 오류");// catch로 이동
       console.log(`response delaytime: ${(performance.now()-start)/1000}`);
-      const responseBodyData = await res.json().then(result=>
-        {return result.data});
+      // const responseBodyData = await res.json().then(result=>
+      //   {return result.data});
+      const responseBodyData = await res.json().then(result => { return result.data.images});
       if(responseBodyData.length > 0){
         propagateResBodyData(new Map(responseBodyData.map((el)=>{
           return [el.url,{url: el.url, response: true, status: el.status, harmful: el.harmuful}];
@@ -482,8 +505,19 @@ async function  fetchBatch() {
           : `Request failed: ${err.message}`
       );
     } 
-}
+    }
+
+
 /*
+REQUEST DATA
+[
+  {
+    canonicalUrl: item.canonicalUrl,
+      url: item.url,
+        status: false,
+          harmful: false
+  }
+]
 RESPONSE DATA example
 {
     "data": [
@@ -529,25 +563,8 @@ async function flushBatch() {
   
     const errorCount = 0;
     const snapshot = batchForDB.splice(0,batchForDB.length); //새로 push된 data를 잃어버리지 않기 위해 스냅샷 생성 후 이용
-    const resolvedBatch = await Promise.all(
-      snapshot.map(async (item) => {
-        let canonicalUrl;
-        // try {
-        //   canonicalUrl = await item.canonicalUrlPromise;
-        // } catch (e) {
-        //   console.log(item.url+"<-정규화 에러");
-        //   errorCount++;
-        //   canonicalUrl = item.url; //일단은 고유 url 넣고 push
-        // }
-        return {
-          canonicalUrl: item.url,   // 정규화 url, 인덱스/PK
-          tabId: item.tabId,
-          url: item.url           // 원본 url 
-        };
-      })
-    ).catch(()=>{console.log("총 실패한 데이터 수:" + errorCount)});
     console.log("flush!");
-    batchForFetch.push(...await DBCheckAndAdd(resolvedBatch));
+    batchForFetch.push(...await DBCheckAndAdd(snapshot));
     
     fetchBatch();
   
@@ -567,9 +584,8 @@ async function flushBatch() {
 async function storeImage(tabId,url) {
   batchForDB.push(
     {
-    canonicalUrlPromise: canonicalizeImageUrl(url),
-    tabId:tabId,
-    url: url
+      url: url,
+      tabId:tabId
     }
   );
   
@@ -599,7 +615,6 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log("ㅁㄴ아렁매ㅑㄻ야ㅐㄹ");
   if (message?.type === "imgDataFromContentScript") {
     console.log(`tabid:${sender.tab.id} frameid:${sender.frameId}`);
     checkCsData(sender?.tab?.id, sender?.frameId, message.data).then(batchFromScript => {
@@ -611,74 +626,3 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 });
-
-// setInterval(
-//   () =>{
-//     chrome.runtime.sendMessage({
-//       type: "waitingData",
-//       data: waiting, // 20개만 보내고, 배열은 자동으로 비움
-//     });
-//     waiting.splice(0, waiting.length); 
-//       }, 500);
-
-
-      
-// // 크롬 확장 프로그램 manifest에 "webRequest", "webRequestBlocking", "<all_urls>" 권한 필요
-
-// const successSet = new Set();
-// const totalSet = new Set();
-// const failMap = new Map();
-
-// // 이미지 요청 추적
-// chrome.webRequest.onCompleted.addListener(
-//   async (details) => {
-//     // 이미지 요청만 필터
-//     if (details.type !== "image") return;
-
-//     const imageUrl = details.url;
-//     // 중복 요청 방지
-//     if (successSet.has(imageUrl) || failMap.has(imageUrl)) return;
-
-//     totalSet.add(imageUrl);
-
-//     try {
-//       const res = await fetch(imageUrl, { mode: "cors", cache: "no-store" });
-//       // "no-cors"로 요청하면 res.ok가 항상 false일 수 있으므로 status만 체크
-//       if (res.status >= 200 && res.status < 400) {
-//         console.log(`[이미지 성공] ${imageUrl} (status: ${res.status})`);
-//         console.log('%c ', `font-size:1px; padding:20px; background:url(${imageUrl}) no-repeat; background-size:contain;`);
-      
-//         successSet.add(imageUrl);
-//       } else {
-//         // 이미지 데이터 받았으나 상태코드 이상
-//         const msg = `[이미지 수신 비정상] ${imageUrl} (status: ${res.status})`;
-//         console.warn(msg);
-//         failMap.set(imageUrl, msg);
-//       }
-//     } catch (err) {
-//       // fetch가 실제로 거부/차단된 경우
-//       let reason = "알 수 없는 오류";
-//       if (err instanceof TypeError) {
-//         reason = "CORS 정책 또는 네트워크/인증/캐시 문제";
-//       }
-//       const msg = `[이미지 실패] ${imageUrl} (원인: ${reason}, 상세: ${err.message})`;
-//       console.error(msg);
-//       failMap.set(imageUrl, msg);
-//     }
-//   },
-//   { urls: ["<all_urls>"] }
-// );
-
-// // 5초마다 누적 결과 콘솔 출력
-// setInterval(() => {
-//   const ok = successSet.size;
-//   const fail = failMap.size;
-//   console.log(`[5초 집계] 이미지 요청 결과 - 성공: ${ok}건, 실패: ${fail}건`);
-// }, 5000);
-
-
-// chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-//   if (msg === "getSuccessImages") {
-//     sendResponse(Array.from(totalSet));
-//   }
-// });
