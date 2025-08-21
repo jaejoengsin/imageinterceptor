@@ -3,17 +3,19 @@ Vision API 호출 서비스 (비동기 배치 처리 전용)
 """
 import os
 import asyncio
+import base64
 from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 from google.cloud import vision
 from config import config
 
-async def analyze_images_batch(img_urls: List[str]) -> List[Dict[str, Any]]:
+
+async def analyze_images_batch(image_base64_list: List[str]) -> List[Dict[str, Any]]:
     """
-    여러 이미지 URL을 Vision API로 배치 전송하여 유해 여부 분석 (최대 16개)
+    여러 이미지 Base64 데이터를 Vision API로 배치 전송하여 유해 여부 분석 (최대 16개)
     
     Args:
-        img_urls (List[str]): 분석할 이미지 URL 리스트 (최대 16개)
+        image_base64_list (List[str]): 분석할 이미지 Base64 문자열 리스트 (최대 16개)
         
     Returns:
         List[Dict[str, Any]]: 각 이미지별 분석 결과 리스트
@@ -31,16 +33,16 @@ async def analyze_images_batch(img_urls: List[str]) -> List[Dict[str, Any]]:
             "message": "Google Cloud Vision API가 설정되지 않았습니다. 환경 변수를 확인해주세요.",
             "is_harmful": None
         }
-        return [error_result] * len(img_urls)
+        return [error_result] * len(image_base64_list)
     
     # 최대 16개 제한 확인
-    if len(img_urls) > 16:
+    if len(image_base64_list) > 16:
         error_result = {
             "error": True,
             "message": "Vision API는 한 번에 최대 16개 이미지만 처리할 수 있습니다.",
             "is_harmful": None
         }
-        return [error_result] * len(img_urls)
+        return [error_result] * len(image_base64_list)
     
     try:
         # 동기 Vision API 호출을 별도 스레드에서 실행
@@ -50,11 +52,20 @@ async def analyze_images_batch(img_urls: List[str]) -> List[Dict[str, Any]]:
             # Vision API 클라이언트 생성 (타임아웃 설정)
             client = vision.ImageAnnotatorClient()
             
-            # 배치 요청 생성
+            # 배치 요청 생성 
             requests = []
-            for img_url in img_urls:
+            for image_base64 in image_base64_list:
+                # data: 헤더가 있다면 제거
+                if image_base64.startswith('data:'):
+                    _, base64_data = image_base64.split(',', 1)
+                else:
+                    base64_data = image_base64
+                
+                # Base64 디코딩하여 바이트 데이터로 변환
+                image_bytes = base64.b64decode(base64_data)
+                
                 image = vision.Image()
-                image.source.image_uri = img_url
+                image.content = image_bytes  # 바이트 데이터 사용
                 
                 request = vision.AnnotateImageRequest(
                     image=image,
@@ -73,17 +84,18 @@ async def analyze_images_batch(img_urls: List[str]) -> List[Dict[str, Any]]:
         results = []
         for i, image_response in enumerate(response.responses):
             if image_response.error.message:
-                # 개별 이미지 오류
+                # 개별 이미지 오류 처리
+                error_msg = image_response.error.message
+                friendly_msg = f"Vision API 오류 (이미지 {i+1}): {error_msg}"
+                
                 result = {
                     "error": True,
-                    "message": f"Vision API 오류 (이미지 {i+1}): {image_response.error.message}",
-                    "is_harmful": None,
-                    "image_url": img_urls[i]
+                    "message": friendly_msg,
+                    "is_harmful": None
                 }
             else:
                 # 성공적으로 처리된 경우
                 result = _analyze_safe_search_results(image_response.safe_search_annotation)
-                result["image_url"] = img_urls[i]
             
             results.append(result)
         
@@ -96,7 +108,7 @@ async def analyze_images_batch(img_urls: List[str]) -> List[Dict[str, Any]]:
             "message": f"Vision API 배치 호출 중 오류 발생: {str(e)}",
             "is_harmful": None
         }
-        return [error_result] * len(img_urls)
+        return [error_result] * len(image_base64_list)
 
 def _analyze_safe_search_results(safe_search) -> dict:
     """
