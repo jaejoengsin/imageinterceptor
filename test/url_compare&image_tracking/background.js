@@ -240,7 +240,7 @@ async function checkCsData(tabId, frameId, batch) {
 
   const CsBatchForDBAdd = [];
 
-  const csBatchForResponse = await Promise.all(
+  let csBatchForResponse = await Promise.all(
 
     batch.map(async (item) => {
       try {
@@ -306,7 +306,7 @@ async function checkCsData(tabId, frameId, batch) {
         console.log("이미지 비교중 에러: ", e, "\nURL: ", item.url);
       }
     }));
-
+   
   if (CsBatchForDBAdd?.length != 0) {
 
     const tx = DB.transaction('imgURL', 'readwrite');
@@ -332,6 +332,10 @@ async function checkCsData(tabId, frameId, batch) {
   await tx.done?.();
 
   const delay = await new Promise(resolve => setTimeout(resolve, 200));
+
+  csBatchForResponse = csBatchForResponse.filter(x => x !== undefined);
+  console.log('Receiving  request:', batch);
+  console.log('Sending response:', csBatchForResponse);
   return csBatchForResponse; //받은 배치 중에서 바로 응답할 이미지 객체만 넣어서 return
 }
 
@@ -392,6 +396,8 @@ async function checkTimeAndRefetch() {
   const tx = DB.transaction('imgURL', 'readwrite');
   const store = tx.objectStore('imgURL');
 
+  const reFetchData = new Map();
+
   for (const [url, imgData] of CsBatchForWaiting) {
     let dbValue = await reqTablePromise(store.get(url)).then(result => {
       console.log("table에서 key 조회하고 value 가져오기 성공");
@@ -400,12 +406,23 @@ async function checkTimeAndRefetch() {
       console.error("table에서 key 조회하고 value 가져오는 중에 Error 발생:", error);
     });
     if (retryThreshold < (Date.now() - dbValue.saveTime)) {
-      fetchBatch([imgData], imgData.tabId);
+      if(!reFetchData.get(imgData.tabId)){
+        reFetchData.set(imgData.tabId, [imgData]);  
+      }
+      else{
+        reFetchData.get(imgData.tabId).push(imgData);
+      }
+
       dbValue.saveTime = Date.now();
       await reqTablePromise(store.put(dbValue));
     }
   }
+
+  for(const [tabId, imgDataArr] of reFetchData){
+    fetchBatch([imgDataArr], tabId);
+  }
   await tx.done?.();
+
 }
 
 
@@ -519,7 +536,6 @@ async function checkTimeAndRefetch() {
       CsImgDataForFetch = await Promise.all(
         CsImgData.map(async imgdata => {
           const content = await fetchAndReturnBase64Img(imgdata.url, refererUrl);
-          console.log("blob data: " + content);
           return {
             url: imgdata.url,
             content: content,
@@ -621,6 +637,7 @@ async function checkTimeAndRefetch() {
     if (message?.type === "imgDataFromContentScript") {
 
       checkCsData(sender?.tab?.id, sender?.frameId, message.data).then(batchFromScript => {
+        
         sendResponse({
           type: "response",
           data: batchFromScript,
