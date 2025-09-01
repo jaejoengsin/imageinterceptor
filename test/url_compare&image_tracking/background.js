@@ -115,7 +115,8 @@ let PromiseForInit = (async () => {
     console.log("db로드완료");
   }
   catch (e) {
-    console.log("서비스워커 초기화 중에 에러 발생:" + e);
+    console.log("서비스워커 초기화 - db 로드 및 키셋 로드 중에 에러 발생:" + e);
+    throw new Error("error while loading db or keyset ");
   }
   return true;
 })();
@@ -227,10 +228,11 @@ let PromiseForInit = (async () => {
 
 
 async function checkCsData(tabId, frameId, batch) {
-
-  if (!keySetLoaded) await loadKeySet(DB);
-  if (!DB) {
-    console.error("error from DBCheckAndAdd:DB가 준비되지 않았음.");
+  
+  try {
+    await PromiseForInit; //db init 프로미스 기다림. 
+  } catch (e) {
+    console.error(e);
     return;
   }
 
@@ -633,9 +635,14 @@ async function checkTimeAndRefetch() {
 
 
 
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     if (message?.type === "imgDataFromContentScript") {
-
+      try{
+      await PromiseForInit; //db init 프로미스 기다림. 
+      } catch(e){
+        console.error(e);
+        return;
+      }
       checkCsData(sender?.tab?.id, sender?.frameId, message.data).then(batchFromScript => {
         
         sendResponse({
