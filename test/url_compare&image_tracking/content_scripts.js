@@ -250,6 +250,22 @@ function createRandomImgID(img){
   requestAnimationFrame(check);
 }
 
+function isElementInViewport(node) {
+  // const rect = node.getBoundingClientRect();
+  // return (
+  //   rect.top >= 0 &&
+  //   rect.left >= 0 &&
+  //   rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+  //   rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+  // );
+  const rect = node.getBoundingClientRect();
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+
+  // 뷰포트의 2배 높이 범위 내에 있으면 true 반환
+  return rect.top < viewportHeight * 2 && rect.bottom > -viewportHeight;
+}
+
+
 
 //checkCurrentSrc로 requestAnimationFrame 시점에 maskandsend 호출. currentSrc를 안정적으로 얻기 위함.
 //언제 다시 이미지가 들어올지 모르므로 일단 disconnect는 안함
@@ -264,6 +280,7 @@ class imageObservers {
       entries.forEach(entry => {
         if (!entry.isIntersecting) return;
         const imgObj = entry.target;
+        if (!isElementInViewport(imgObj)) return;
         // console.log("imgviewObserver observe entry, id: ",imgObj.dataset.imgId);
         checkCurrentSrc(imgObj, htmlImgElement => {
                 checkConditionAndSend(htmlImgElement, 'dynamicIMG'); //maskAndSend를 바로 호출해도 문제 없는 것을 확인하였으나 안정성을 위해 이렇게 함
@@ -274,7 +291,7 @@ class imageObservers {
       
     }, {
       root: null,
-      rootMargin: "0px 0px -3% 0px", //하단 스크롤 시 콘텐츠가 3퍼센트 이상 노출될 시에 동작
+      rootMargin: "0px 0px -20% 0px", //하단 스크롤 시 콘텐츠가 3퍼센트 이상 노출될 시에 동작
       threshold: 0.1, //rootMargin: 0px, threshold: 0으로 해도 작동이 가능하나, 안정성을 위해 일단 수치를 조금 높인 상태
     });
     
@@ -292,13 +309,11 @@ class imageObservers {
                 elements.push(node);
                 // console.log("이미지의 id는: ", node.dataset.imgId);
               }
-            
-            
+              else return;
     
             } else {
               // <img>가 아닌 요소가 들어온 경우: 자식 img 검색
               node.querySelectorAll('img').forEach( img => {
-              
                 // img.style.setProperty('visibility', 'hidden', 'important');
                 // img.style.setProperty('opacity', '0', 'important');
                 if (!img.dataset.imgId) {
@@ -352,10 +367,11 @@ function Collect_staticImg () {
 
   staticImgs.forEach(img => {
     const currentImg = img; // 'this' 컨텍스트 문제 해결을 위한 캡처
-    if(!currentImg.dataset.imgId){
+    if (!currentImg.dataset.imgId){
       currentImg.classList.add("imgMasking");
       createRandomImgID(currentImg);
-      checkConditionAndSend(currentImg,"staticIMG");
+      IMGObs.imgViewObserver.observe(currentImg);
+
     }
 
   })
@@ -370,12 +386,12 @@ async function pageInit() {
   //비유해 이미지 필터링 모듈 동적 import
   filterModule = await import (chrome.runtime.getURL('test/url_compare&image_tracking/url_filterModule_based_safe_pattern.js'));
   // ... static 이미지 처리 로직 ...
-  Collect_staticImg();
   if(document.readyState!="loading"){
     IMGObs = new imageObservers;
     IMGObs.imgObserve();
- }
-
+  }
+  Collect_staticImg();
+  
  if (window.top === window.self) {
   const overlay = document.getElementById('extensionOverlay');
   if (overlay) {

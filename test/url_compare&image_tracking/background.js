@@ -421,7 +421,7 @@ async function checkTimeAndRefetch() {
   }
 
   for(const [tabId, imgDataArr] of reFetchData){
-    fetchBatch([imgDataArr], tabId);
+    fetchBatch(imgDataArr, tabId);
   }
   await tx.done?.();
 
@@ -494,7 +494,7 @@ async function checkTimeAndRefetch() {
       }
     }
     sendWaitingCsDataToCs(readyToSend);//.then(res => { console.log("response status(WaitingCsData Sended): ", res); })contentscript와 runtimemessage 교신
-    checkTimeAndRefetch();
+    //checkTimeAndRefetch();
     console.log("현재 기다리고 있는 content: " + CsBatchForWaiting.size);
   }
 
@@ -635,16 +635,10 @@ async function checkTimeAndRefetch() {
 
 
 
-  chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === "imgDataFromContentScript") {
-      try{
-      await PromiseForInit; //db init 프로미스 기다림. 
-      } catch(e){
-        console.error(e);
-        return;
-      }
+    
       checkCsData(sender?.tab?.id, sender?.frameId, message.data).then(batchFromScript => {
-        
         sendResponse({
           type: "response",
           data: batchFromScript,
