@@ -36,3 +36,7 @@ class ConvNeXtTinyMultiHead(nn.Module):
         nud = self.head_nudity(z)     # [B,1]
         vio = self.head_violence(z)   # [B,1]
         return torch.cat([nud, vio], dim=1)  # [B,2]
+        
+def build_model():
+    return ConvNeXtTinyMultiHead()
+    
