@@ -9,6 +9,7 @@ const MAX_N = 16, IDLE = 50;
 let idleT = null;
 let totalimg = 0;
 
+const harmfulImgMark = chrome.runtime.getURL('images/icons/main_icon.png');
 
 
 const link = document.createElement('link');
@@ -81,14 +82,15 @@ function Flush() {
         let totalStatus = 0;
         let succeedStatus = 0;
         let isHarmful = 0;
+
         console.log("service worker 송신:"+batchFromContentScript.length+"--------------"+"수신"+responseBatch.length);
         responseBatch.forEach(item => {
-
           totalStatus++;
-
+          
+          console.log("id: "+ item.id);
           try{
+            
             if(item.status){
-
               succeedStatus++;
               const object = document.querySelector(`img[data-img-id="${item.id}"]`);
 
@@ -99,9 +101,11 @@ function Flush() {
                   // object.style.removeProperty('visibility');
                   // object.style.removeProperty('opacity');
 
-                  object.classList.add("harmful");
                   console.log("유해 이미지: " + item.url);
                   object.style.border = "8px solid red";
+                  // object.src = harmfulImgMark;
+                  object.classList.remove('imgMasking');
+                  object.classList.add("harmful");
 
                 }
                 else {
@@ -199,7 +203,7 @@ function createRandomImgID(img){
  * @param {object} img - dom 이미지 노드
  * @param {string} type - 정적 교체/동적 교체 기록
  */
-function checkConditionAndSend (img, type) {
+ function checkConditionAndSend (img, type) {
   //if (img.classList.contains('imgMasking')|| img.classList.contains('staticIMG')|| img.classList.contains('dynamicIMG')) return;
   const url = img.currentSrc || img.src;
   let absUrl;
@@ -222,6 +226,7 @@ function checkConditionAndSend (img, type) {
     return;
   }
   img.classList.add(type); //static | dynamic img
+
   dataBuffer.push({ id: img.dataset.imgId, url: absUrl.toString(), harmful: false, status: false });
   maybeFlush();
 
@@ -259,7 +264,7 @@ class imageObservers {
       entries.forEach(entry => {
         if (!entry.isIntersecting) return;
         const imgObj = entry.target;
-        console.log("imgviewObserver observe entry, id: ",imgObj.dataset.imgId);
+        // console.log("imgviewObserver observe entry, id: ",imgObj.dataset.imgId);
         checkCurrentSrc(imgObj, htmlImgElement => {
                 checkConditionAndSend(htmlImgElement, 'dynamicIMG'); //maskAndSend를 바로 호출해도 문제 없는 것을 확인하였으나 안정성을 위해 이렇게 함
                 } ); 
@@ -282,10 +287,10 @@ class imageObservers {
             if (node.tagName === 'IMG') {
             
               if (!node.dataset.imgId){
-                console.log("observer <new node> detect");
+                // console.log("observer <new node> detect");
                 createRandomImgID(node);
                 elements.push(node);
-                console.log("이미지의 id는: ", node.dataset.imgId);
+                // console.log("이미지의 id는: ", node.dataset.imgId);
               }
             
             
@@ -297,10 +302,10 @@ class imageObservers {
                 // img.style.setProperty('visibility', 'hidden', 'important');
                 // img.style.setProperty('opacity', '0', 'important');
                 if (!img.dataset.imgId) {
-                  console.log("observer <new node> detect");
+                  // console.log("observer <new node> detect");
                   createRandomImgID(img);
                   elements.push(img);
-                  console.log("이미지의 id는: ", img.dataset.imgId);
+                  // console.log("이미지의 id는: ", img.dataset.imgId);
     
                 } 
             
@@ -312,7 +317,7 @@ class imageObservers {
     
       });
       totalimg += elements.length;
-      console.log("total IMG: ", totalimg);
+      // console.log("total IMG: ", totalimg);
       elements.forEach(el => {
         requestAnimationFrame(() => {
           el.classList.add('imgMasking');//다음 렌더 사이클에서 마스킹
@@ -398,7 +403,7 @@ else {
 
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!들어왔당께");
+  console.log("서비스워커에서 대기하던 데이터가 들어왔습니다");
   if (message.type === "imgDataWaitingFromServiceWork") {
     try {
      const responseWaitingDataInServiceWorking = message.data;
@@ -412,7 +417,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       responseWaitingDataInServiceWorking.forEach(item => {
 
       totalStatus++;
-
       try {
         if (item.status) {
           const object = document.querySelector(`img[data-img-id="${item.id}"]`);
@@ -425,9 +429,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               // object.style.removeProperty('visibility');
               // object.style.removeProperty('opacity');
 
-              object.classList.add("harmful");
               console.log("유해 이미지: " + item.url);
               object.style.border = "8px solid red";
+              // object.src = harmfulImgMark;
+              object.classList.remove('imgMasking');
+              object.classList.add("harmful");
 
             }
             else {
