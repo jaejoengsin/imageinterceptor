@@ -108,7 +108,7 @@ function Flush() {
 
                   object.dataset.masking = "None";
 
-                  object.classList.add("harmful");
+                  object.dataset.type += " Harmful";
 
                 }
                 else {
@@ -212,7 +212,6 @@ function createRandomImgID(img){
  * @param {string} type - 정적 교체/동적 교체 기록
  */
  function checkConditionAndSend (img, type) {
-  //if (img.classList.contains('imgMasking')|| img.classList.contains('staticIMG')|| img.classList.contains('dynamicIMG')) return;
   const url = img.currentSrc || img.src;
   let absUrl;
   if (!url || url === '') {
@@ -225,7 +224,7 @@ function createRandomImgID(img){
     if(filterModule.filter_based_safeUrlPattern(absUrl)){
     img.classList.remove("imgMasking");
     NoNSafeImgCount++;
-    img.dataset.imgId = "NOTHARMFUL";
+    img.dataset.imgId = "except";
     console.log("비유해 이미지:",absUrl.toString()," 총합:",NoNSafeImgCount);
     return;
   }} catch(e){
@@ -233,7 +232,7 @@ function createRandomImgID(img){
     console.error("오류를 발생시킨 이미지의 url:", url);
     return;
   }
-  img.classList.add(type); //static | dynamic img
+  img.dataset.type = type; //static | dynamic img
 
   dataBuffer.push({ id: img.dataset.imgId, url: absUrl.toString(), harmful: false, status: false });
   maybeFlush();
@@ -471,7 +470,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               object.dataset.masking = "None";
 
               // object.classList.remove('imgMasking');
-              object.classList.add("harmful");
+              
+              object.dataset.type += " Harmful";
 
             }
             else {
