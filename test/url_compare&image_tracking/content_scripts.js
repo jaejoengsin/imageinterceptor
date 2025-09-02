@@ -104,7 +104,10 @@ function Flush() {
                   console.log("유해 이미지: " + item.url);
                   object.style.border = "8px solid red";
                   // object.src = harmfulImgMark;
-                  object.classList.remove('imgMasking');
+                  // object.classList.remove('imgMasking');
+
+                  object.dataset.masking = "None";
+
                   object.classList.add("harmful");
 
                 }
@@ -126,7 +129,10 @@ function Flush() {
                   // object.style.removeProperty('visibility');
                   // object.style.removeProperty('opacity');
     
-                  object.classList.remove('imgMasking');
+                  // object.classList.remove('imgMasking');
+
+                  object.dataset.masking = "None";
+
                   console.log("성공 id: "+ item.id);
                   object.style.border = "8px solid blue";
                   
@@ -147,7 +153,9 @@ function Flush() {
                 // object.style.removeProperty('visibility');
                 // object.style.removeProperty('opacity');
 
-                object.classList.remove('imgMasking');
+                object.dataset.masking = "None";
+
+                // object.classList.remove('imgMasking');
                 console.log("성공 id: " + item.id);
                 object.style.border = "8px solid blue";
 
@@ -250,22 +258,25 @@ function createRandomImgID(img){
   requestAnimationFrame(check);
 }
 
-function isElementInViewport(node) {
-  // const rect = node.getBoundingClientRect();
-  // return (
-  //   rect.top >= 0 &&
-  //   rect.left >= 0 &&
-  //   rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-  //   rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-  // );
+/**
+ * 
+ * @param {HTMLElement} node img node
+ * @param {number} topMargin 상단 여백을 뷰포트 높이의 배수로 설정. 기본값은 2
+ * @param {number} bottomMargin 하단 여백을 뷰포트 높이의 배수로 설정. 기본값 1
+ * @returns {boolean} 요소가 지정된 범위 안에 있으면 true, 아니면 false.
+ */
+function isElementInViewport(node, topMargin = 1, bottomMargin = 1) {
   const rect = node.getBoundingClientRect();
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
 
-  // 뷰포트의 2배 높이 범위 내에 있으면 true 반환
-  return rect.top < viewportHeight * 2 && rect.bottom > -viewportHeight;
+  // 뷰포트 상단에서 topMargin 배수만큼 떨어진 위치
+  const topThreshold = viewportHeight * topMargin;
+  // 뷰포트 하단에서 bottomMargin 배수만큼 떨어진 위치
+  const bottomThreshold = -viewportHeight * bottomMargin;
+
+  // 요소의 상단이 topThreshold보다 작고, 요소의 하단이 bottomThreshold보다 커야 합니다.
+  return rect.top < topThreshold && rect.bottom > bottomThreshold;
 }
-
-
 
 //checkCurrentSrc로 requestAnimationFrame 시점에 maskandsend 호출. currentSrc를 안정적으로 얻기 위함.
 //언제 다시 이미지가 들어올지 모르므로 일단 disconnect는 안함
@@ -276,6 +287,7 @@ class imageObservers {
   
   constructor() {
 
+    this.Isreconnect = false;
     this.imgViewObserver = new IntersectionObserver(entries => {
       entries.forEach(entry => {
         if (!entry.isIntersecting) return;
@@ -291,8 +303,8 @@ class imageObservers {
       
     }, {
       root: null,
-      rootMargin: "0px 0px -20% 0px", //하단 스크롤 시 콘텐츠가 3퍼센트 이상 노출될 시에 동작
-      threshold: 0.1, //rootMargin: 0px, threshold: 0으로 해도 작동이 가능하나, 안정성을 위해 일단 수치를 조금 높인 상태
+      rootMargin: "10% 0px 0px 0px", 
+      threshold: 0, //rootMargin: 0px, threshold: 0으로 해도 작동이 가능하나, 안정성을 위해 일단 수치를 조금 높인 상태
     });
     
     this.imgObserver = new MutationObserver(mutations => {
@@ -335,7 +347,9 @@ class imageObservers {
       // console.log("total IMG: ", totalimg);
       elements.forEach(el => {
         requestAnimationFrame(() => {
-          el.classList.add('imgMasking');//다음 렌더 사이클에서 마스킹
+          el.dataset.masking = 'imgMasking';
+          // el.classList.add('imgMasking');//다음 렌더 사이클에서 마스킹
+
           this.imgViewObserver.observe(el);//렌더링, 레이아웃 정리가 제대로 이루어지지 않은 상태에서 감지될 수 있으므로 한 프레임 쉬고 호출
         
         });
@@ -357,8 +371,13 @@ class imageObservers {
     this.imgViewObserver.disconnect();
   }
 
+  reconnectObeserver() {
+    this.Isreconnect = true;
+    this.imgObserve();
+    this.imgViewObserver();
+  }
 }  
-console.log("테스트");
+
 
 
 function Collect_staticImg () {
@@ -448,7 +467,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               console.log("유해 이미지: " + item.url);
               object.style.border = "8px solid red";
               // object.src = harmfulImgMark;
-              object.classList.remove('imgMasking');
+
+              object.dataset.masking = "None";
+
+              // object.classList.remove('imgMasking');
               object.classList.add("harmful");
 
             }
@@ -470,7 +492,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               // object.style.removeProperty('visibility');
               // object.style.removeProperty('opacity');
 
-              object.classList.remove('imgMasking');
+              object.dataset.masking = "None";
+
+              // object.classList.remove('imgMasking');
               console.log("성공 id: " + item.id);
               object.style.border = "8px solid blue";
 
@@ -491,7 +515,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             // object.style.removeProperty('visibility');
             // object.style.removeProperty('opacity');
 
-            object.classList.remove('imgMasking');
+            object.dataset.masking = "None";
+
+            // object.classList.remove('imgMasking');
             console.log("성공 id: " + item.id);
             object.style.border = "8px solid blue";
 
