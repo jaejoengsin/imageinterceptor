@@ -34,8 +34,6 @@ reject(reason)
 : 작업이 실패했을 때 Promise의 상태를 '거부(rejected)' 상태로 전환시키고, 에러(이유)를 reason으로 전달합니다.
 해당 값은 .catch() 또는 .then(, ) 두 번째 콜백, 비동기적으로 실행
 */
-
-
 function openImageUrlDB() {
   return new Promise((resolve, reject) => {
     //imageUrlDB는 db이름. 만약 존재하지 않으면 생성, 존재하면 해당 db를 열음 
@@ -120,111 +118,6 @@ let PromiseForInit = (async () => {
   }
   return true;
 })();
-
-
-// async function DBCheckAndAdd(batch) {
-//   if (!keySetLoaded) await loadKeySet(DB);
-//   if (!DB) {
-//     console.error("error from DBCheckAndAdd:DB가 준비되지 않았음.");
-//     return;
-//   }
-
-
-
-//   const laterToFetch = [];
-//   const firstToFetch = [];
-//   const imagesNotInDB = [];
-
-//   for (const item of batch) {
-//     if (!keySet.has(item.canonicalUrl)) { // fetch 대상(아직 없음)
-//       let pureBase64;
-
-//       try {
-//         pureBase64 = await fetchAndReturnBase64Img(item.url);
-//       } catch (err) {
-//         console.log("error while making base64: ", err);
-//       }
-
-
-//       if (currentTab == item.tabId) {
-//         firstToFetch.push({
-//           url: item.url,
-//           content: pureBase64,
-//           status: false,
-//           harmful: false
-//         });
-//         //console.log("firsttofetch!"+firstToFetch.length);
-//       }
-//       else {
-//         laterToFetch.push({
-//           url: item.url,
-//           content: pureBase64,
-//           status: false,
-//           harmful: false
-//         });
-//         //console.log("latertofetch!"+laterToFetch.length);
-//       }
-//       imagesNotInDB.push(
-//         {
-//           url: item.url,
-//           domain: (new URL(item.url)).hostname.replace(/^www\./, ''),//수정예정,
-//           response: false,
-//           status: false,   // 검사완료
-//           harmful: false,   // 기본값
-//         }
-//       );
-//       keySet.add(item.url); // 중복 방지
-//     }
-//     else {
-
-//       const DBimgvalue = await reqTablePromise(store.get(item.url)).then(result => {
-//         console.log("table에서 key 조회하고 value 가져오기 성공(새로 감지된 이미지를 db 조회 중에)");
-//         return result;
-//       }).catch(error => {
-//         console.error("table에서 key 조회하고 value 가져오는 중에 Error 발생(새로 감지된 이미지를 db 조회 중에):", error.message);
-//       });
-//       if (!DBimgvalue.response) {
-//         if (currentTab == item.tabId) {
-//           firstToFetch.push({
-//             url: item.url,
-//             content: pureBase64,
-//             status: false,
-//             harmful: false
-//           });
-//           //console.log("firsttofetch!"+firstToFetch.length);
-//         }
-//         else {
-//           laterToFetch.push({
-//             url: item.url,
-//             content: pureBase64,
-//             status: false,
-//             harmful: false
-//           });
-//           //console.log("latertofetch!"+laterToFetch.length);
-//         }
-//       }
-//     }
-//     //있으나, response가 true가 아니라면 재요청(서버로부터 요청을 보냈지만 응답을 받기 전에 비정상적인 종료가 되었다고 가정);
-//   }
-
-//   const tx = DB.transaction('imgURL', 'readwrite');
-//   const store = tx.objectStore('imgURL');
-
-
-//   imagesNotInDB.forEach(imgData => {
-//     store.put(imgData);     // DB에 저장
-//   });
-//   await tx.done?.(); // 일부 브라우저에선 필요 없음
-
-//   firstToFetch.unshift(...laterToFetch);
-//   console.log("DB add:전체/중복/추가 - " + batch.length + "/" + (batch.length - firstToFetch.length) + "/" + firstToFetch.length);
-//   //console.log("fetchdata:"+firstToFetch.length);
-//   return firstToFetch;
-// }
-
-
-
-
 
 
 async function checkCsData(tabId, frameId, batch) {
@@ -581,50 +474,50 @@ async function checkTimeAndRefetch() {
   }
 
 
-  /*
-  REQUEST DATA
-  [
-    {
-      canonicalUrl: item.canonicalUrl,
-        url: item.url,
-          status: false,
-            harmful: false
-    }
-  ]
-  RESPONSE DATA example
-  {
-      "data": [
-          {
-              "canonicalUrl": "https://www.google.com/pagead/1p-user-list/962985656/?backend=innertube&cname=1&cver=2_20250807&data=backend%3Dinnertube%3Bcname%3D1%3Bcver%3D2_20250807%3Bel%3Dadunit%3Bptype%3Df_adview%3Btype%3Dview%3Butuid%3Dtdz9LWNNQKUg4Xpma_40Ug%3Butvid%3D4ByJ0z3UMNE&is_vtc=0&ptype=f_adview&random=428766496&utuid=tdz9LWNNQKUg4Xpma_40Ug",
-              "url": "https://www.google.com/pagead/1p-user-list/962985656/?backend=innertube&cname=1&cver=2_20250807&data=backend%3Dinnertube%3Bcname%3D1%3Bcver%3D2_20250807%3Bel%3Dadunit%3Bptype%3Df_adview%3Btype%3Dview%3Butuid%3Dtdz9LWNNQKUg4Xpma_40Ug%3Butvid%3D4ByJ0z3UMNE&is_vtc=0&ptype=f_adview&random=428766496&utuid=tdz9LWNNQKUg4Xpma_40Ug",
-              "status": true,
-              "harmful": false,
-              "category": "medical",
-              "score": 0.4,
-              "details": {
-                  "adult": 1,
-                  "spoof": 1,
-                  "medical": 2,
-                  "violence": 2,
-                  "racy": 2
-              },
-              "processed": true,
-              "error": false,
-              "error_message": null,
-              "error_type": null
-          }
-      ],
-      "summary": {
-          "total": 1,
-          "processed": 1,
-          "harmful": 0,
-          "safe": 1,
-          "errors": 0,
-          "error_types": {}
-      },
-      "message": "총 1개 이미지 중 1개 처리 완료 (배치 API 호출: 1회로 1개 이미지 동시 처리)"
-  }
-  */
+  
+  // REQUEST DATA
+  // [
+  //   {
+  //     canonicalUrl: item.canonicalUrl,
+  //       url: item.url,
+  //         status: false,
+  //           harmful: false
+  //   }
+  // ]
+  // RESPONSE DATA example
+  // {
+  //     "data": [
+  //         {
+  //             "canonicalUrl": "https://www.google.com/pagead/1p-user-list/962985656/?backend=innertube&cname=1&cver=2_20250807&data=backend%3Dinnertube%3Bcname%3D1%3Bcver%3D2_20250807%3Bel%3Dadunit%3Bptype%3Df_adview%3Btype%3Dview%3Butuid%3Dtdz9LWNNQKUg4Xpma_40Ug%3Butvid%3D4ByJ0z3UMNE&is_vtc=0&ptype=f_adview&random=428766496&utuid=tdz9LWNNQKUg4Xpma_40Ug",
+  //             "url": "https://www.google.com/pagead/1p-user-list/962985656/?backend=innertube&cname=1&cver=2_20250807&data=backend%3Dinnertube%3Bcname%3D1%3Bcver%3D2_20250807%3Bel%3Dadunit%3Bptype%3Df_adview%3Btype%3Dview%3Butuid%3Dtdz9LWNNQKUg4Xpma_40Ug%3Butvid%3D4ByJ0z3UMNE&is_vtc=0&ptype=f_adview&random=428766496&utuid=tdz9LWNNQKUg4Xpma_40Ug",
+  //             "status": true,
+  //             "harmful": false,
+  //             "category": "medical",
+  //             "score": 0.4,
+  //             "details": {
+  //                 "adult": 1,
+  //                 "spoof": 1,
+  //                 "medical": 2,
+  //                 "violence": 2,
+  //                 "racy": 2
+  //             },
+  //             "processed": true,
+  //             "error": false,
+  //             "error_message": null,
+  //             "error_type": null
+  //         }
+  //     ],
+  //     "summary": {
+  //         "total": 1,
+  //         "processed": 1,
+  //         "harmful": 0,
+  //         "safe": 1,
+  //         "errors": 0,
+  //         "error_types": {}
+  //     },
+  //     "message": "총 1개 이미지 중 1개 처리 완료 (배치 API 호출: 1회로 1개 이미지 동시 처리)"
+  // }
+  
 
 
   chrome.tabs.onActivated.addListener(({ tabId }) => {
@@ -634,7 +527,7 @@ async function checkTimeAndRefetch() {
 
 
 
-
+//콘텐츠 스크립트 리스너
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === "imgDataFromContentScript") {
     
@@ -647,3 +540,28 @@ async function checkTimeAndRefetch() {
       return true;
     }
   });
+
+
+  
+
+//팝업 리스너
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'active') {
+    return true;
+  }
+});
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'reload') {
+
+    return true;
+  }
+});
+
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'change_mode') {
+
+    return true;
+  }
+});

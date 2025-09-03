@@ -103,7 +103,7 @@ function Flush() {
 
                   console.log("유해 이미지: " + item.url);
                   object.style.border = "8px solid red";
-                  // object.src = harmfulImgMark;
+                  object.src = harmfulImgMark;
                   // object.classList.remove('imgMasking');
 
                   object.dataset.masking = "None";
@@ -222,7 +222,7 @@ function createRandomImgID(img){
   try{
     absUrl = toAbsoluteUrl(url, document.baseURI );
     if(filterModule.filter_based_safeUrlPattern(absUrl)){
-    img.classList.remove("imgMasking");
+    img.dataset.masking = "None";
     NoNSafeImgCount++;
     img.dataset.imgId = "except";
     console.log("비유해 이미지:",absUrl.toString()," 총합:",NoNSafeImgCount);
@@ -302,7 +302,7 @@ class imageObservers {
       
     }, {
       root: null,
-      rootMargin: "10% 0px 0px 0px", 
+      rootMargin: "40% 0px 0px 0px", 
       threshold: 0, //rootMargin: 0px, threshold: 0으로 해도 작동이 가능하나, 안정성을 위해 일단 수치를 조금 높인 상태
     });
     
@@ -386,7 +386,8 @@ function Collect_staticImg () {
   staticImgs.forEach(img => {
     const currentImg = img; // 'this' 컨텍스트 문제 해결을 위한 캡처
     if (!currentImg.dataset.imgId){
-      currentImg.classList.add("imgMasking");
+      currentImg.dataset.masking = 'imgMasking';
+      // currentImg.classList.add('imgMasking');
       createRandomImgID(currentImg);
       IMGObs.imgViewObserver.observe(currentImg);
 
@@ -465,7 +466,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
               console.log("유해 이미지: " + item.url);
               object.style.border = "8px solid red";
-              // object.src = harmfulImgMark;
+              object.src = harmfulImgMark;
 
               object.dataset.masking = "None";
 

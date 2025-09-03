@@ -5,6 +5,7 @@
     "manifest_version": 3,
 
     "action": {
+      "default_popup": "/src/popup.html",
       "default_icon": "images/icons/main_icon.png"
     },
 
@@ -31,14 +32,14 @@
   "web_accessible_resources": [
   {
     "resources": ["test/url_compare&image_tracking/injectedContent.js", 
-                  "src/css/test.css", "src/css/masking.css", 
+                  "src/css/*.css",
                   "images/icons/*.png", "test/url_compare&image_tracking/utils/nomarlize-url-main",
                   "test/url_compare&image_tracking/url_filterModule_based_safe_pattern.js"
                   ],
     "matches": ["<all_urls>"]
   }
 ],
-"permissions": ["webRequest", "storage", "tabs"]
+"permissions": ["activeTab","webRequest", "storage", "tabs"]
 
 }
 

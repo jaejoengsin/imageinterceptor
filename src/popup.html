@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+  
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="css/popup.css">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!--pont-->
+  <link href="https://fonts.googleapis.com/css2?family=Edu+NSW+ACT+Cursive:wght@400..700&family=Michroma&display=swap"
+    rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet"
+    type="text/css" />
+  <title>Image Interceptor</title>
+</head>
+
+<body>
+  <div class="popup-container">
+    <header class="header-section">
+      <div class="header-left">
+        <img src="../images/icons/main_icon.png" alt="Image Interceptor 로고" class="logo-image">
+        <div class="header-text-container">
+          <h1 class="header-title michroma-regular">Image Interceptor</h1>
+          <p class="header-subtitle" style="color: #0CBA00">수동 모드 활성화</p>
+        </div>
+      </div>
+      <label class="switch" role="switch" aria-checked="true" aria-label="수동 모드 활성화">
+        <input type="checkbox" checked>
+        <span class="slider round"></span>
+      </label>
+    </header>
+
+    <main class="main-content">
+      <section class="card-section">
+        <div class="card-header">
+          <h2 class="card-title michroma-regular">Automatic Filtering</h2>
+          <label class="mini-switch" role="switch" aria-checked="true" aria-label="자동 필터링">
+            <input type="checkbox" checked>
+            <span class="mini-slider round"></span>
+          </label>
+        </div>
+        <p class="card-description">수동 모드 시 필터링 원하는 콘텐츠 직접 선택 필수</p>
+      </section>
+
+      <section class="card-section">
+        <div class="card-header">
+          <h2 class="card-title michroma-regular">Page Reset</h2>
+          <button class="start-btn  michroma-regular">reset</button>
+        </div>
+        <p class="card-description">프로그램 적용 전으로 돌아가기</p>
+      </section>
+
+      <section class="card-section">
+        <div class="card-header">
+          <h2 class="card-title michroma-regular">Filtering Step</h2>
+        </div>
+        <p class="card-description">필터링 단계 설정</p>
+        <div class="step-buttons">
+          <button class="step-btn michroma-regular">1</button>
+          <button class="step-btn active michroma-regular">2</button>
+          <button class="step-btn michroma-regular">3</button>
+        </div>
+        <div class="apply-button-container">
+          <button class="apply-button">
+            <span class="michroma-regular"> apply
+            </span>
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <section class="counter-section">
+      <p class="counter-label">차단된 유해 콘텐츠 수</p>
+      <div class="counter-display">
+        <div class="counter-box">
+          <p class="counter-title">이 페이지에서</p>
+          <p class="counter-number page-count michroma-regular">0</p>
+        </div>
+        <div class="counter-divider"></div>
+        <div class="counter-box">
+          <p class="counter-title">총계</p>
+          <p class="counter-number total-count michroma-regular">5,348</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer-section">
+      <div class="footer-links">
+        <a href="#" class="footer-link">Feedback</a>
+        <span class="link-separator">|</span>
+        <a href="#" class="footer-link">Q&A</a>
+        <span class="link-separator">|</span>
+        <a href="#" class="footer-link">Setting</a>
+      </div>
+      <!-- <img src="https://via.placeholder.com/24" alt="설정 아이콘" class="settings-icon"> -->
+    </footer>
+  </div>
+</body>
+
+</html>
