@@ -1,137 +1,180 @@
 """
-이미지 분석 라우터 - 이미지 데이터 직접 처리
+이미지 분석 라우터 - FormData로 blob 이미지 처리
 """
 import asyncio
-from typing import Any
-from fastapi import APIRouter, HTTPException
-from models.image import BatchAnalyzeRequest, BatchAnalyzeResponse, ImageResult
-from services.vision_client import analyze_images_batch
+import json
+from typing import List, Optional
+from fastapi import APIRouter, HTTPException, UploadFile, Form, File, Request
+from models.image import BatchAnalyzeResponse, ImageResult, AnalyzeSummary, ImageMeta
+from services.use_ai import analyze_images_with_ai
 
 router = APIRouter()
 
 @router.post("", response_model=BatchAnalyzeResponse)
-async def analyze_images_batch_endpoint(request: BatchAnalyzeRequest):
+async def analyze_images_batch_endpoint(
+    images: List[UploadFile] = File(...),
+    imgMeta: List[str] = Form(...)
+):
     """
-    여러 이미지 데이터를 배치로 처리하는 엔드포인트 (최대 16개)
+    여러 이미지를 FormData로 배치 처리하는 엔드포인트 (최대 20개)
     
     확장프로그램 요청 형식:
-    {
-        "data": [
-            {
-                "url": "https://example.com/image.jpg",
-                "content": "base64_인코딩된_이미지_데이터",
-                "status": false,
-                "harmful": false
-            }
-        ]
-    }
+    - images: 이미지 blob 파일들 (UploadFile 형태)
+    - imgMeta: 각 이미지의 메타데이터 JSON 문자열 배열
+    
+    FormData 예시:
+    formData.append('images', img1.blob, 'image1.jpg');
+    formData.append('images', img2.blob, 'image2.jpg');  // 같은 키로 여러 파일
+    formData.append('imgMeta', JSON.stringify({url: "...", status: false, harmful: false}));
+    formData.append('imgMeta', JSON.stringify({url: "...", status: false, harmful: false}));
     """
     
-    # 최대 16개 제한 확인
-    if len(request.data) > 16:
+    # 최대 20개 제한 확인
+    if len(images) > 20:
         raise HTTPException(
             status_code=400,
-            detail="한 번에 최대 16개 이미지만 처리할 수 있습니다."
+            detail="한 번에 최대 20개 이미지만 처리할 수 있습니다."
         )
+    
+    # 이미지와 메타데이터 개수 일치 확인
+    if len(images) != len(imgMeta):
+        raise HTTPException(
+            status_code=400,
+            detail="이미지 개수와 메타데이터 개수가 일치하지 않습니다."
+        )
+    
+
     
     results = []
-    summary = {
-        "total": len(request.data),
-        "processed": 0,
-        "harmful": 0,
-        "safe": 0,
-        "errors": 0,
-        "error_types": {}
-    }
+    summary = AnalyzeSummary(total=len(images))
     
-    # 1단계: Base64 데이터 검증 (프론트엔드에서 검증 완료된 데이터)
-    valid_images = []
-    invalid_results = []
-    
-    for i, image_data in enumerate(request.data):
-        result = ImageResult(
-            url=image_data.url,
-            status=image_data.status,
-            harmful=image_data.harmful
-        )
-        
+    # 1단계: 메타데이터 파싱 및 검증
+    parsed_meta = []
+    for i, meta_str in enumerate(imgMeta):
         try:
-            # Base64 형식 검증만 수행 (실제 디코딩은 vision_client에서)
-            if not image_data.content or len(image_data.content.strip()) == 0:
+            meta_dict = json.loads(meta_str)
+            meta = ImageMeta(**meta_dict)
+            parsed_meta.append(meta)
+        except Exception as e:
+            # 메타데이터 파싱 실패
+            result = ImageResult(
+                url="",
+                status=False,
+                harmful=False,
+                error=True,
+                error_type="meta_invalid",
+                error_message=f"메타데이터 파싱 실패: {str(e)}"
+            )
+            results.append(result)
+            parsed_meta.append(None)
+    
+    # 2단계: 이미지 파일 읽기 및 검증
+    image_bytes_list = []
+    valid_indices = []
+    
+    for i, (image_file, meta) in enumerate(zip(images, parsed_meta)):
+        if meta is None:
+            # 메타데이터가 잘못된 경우 스킵
+            image_bytes_list.append(None)
+            continue
+            
+        try:
+            # 이미지 파일 크기 제한 (10MB)
+            if image_file.size and image_file.size > 10 * 1024 * 1024:
+                raise ValueError("이미지 크기가 10MB를 초과합니다")
+            
+            # 이미지 파일 읽기
+            image_bytes = await image_file.read()
+            
+            if not image_bytes:
                 raise ValueError("이미지 데이터가 비어있습니다")
             
-            valid_images.append((i, image_data, result, image_data.content))
+            image_bytes_list.append(image_bytes)
+            valid_indices.append(i)
+            
+            # 유효한 이미지에 대해 기본 결과 생성
+            if len(results) <= i:
+                results.append(ImageResult(
+                    url=meta.url,
+                    status=meta.status,
+                    harmful=meta.harmful
+                ))
+            else:
+                results[i].url = meta.url
+                results[i].status = meta.status
+                results[i].harmful = meta.harmful
             
         except Exception as e:
-            result.error = True
-            result.error_type = "data_invalid"
-            result.error_message = f"이미지 데이터 검증 실패: {str(e)}"
-            summary["errors"] += 1
-            summary["error_types"]["data_invalid"] = summary["error_types"].get("data_invalid", 0) + 1
-            invalid_results.append((i, result))
+            # 이미지 읽기 실패
+            if len(results) <= i:
+                results.append(ImageResult(
+                    url=meta.url if meta else "",
+                    status=False,
+                    harmful=False,
+                    error=True,
+                    error_type="image_invalid",
+                    error_message=f"이미지 처리 실패: {str(e)}"
+                ))
+            else:
+                results[i].error = True
+                results[i].error_type = "image_invalid"
+                results[i].error_message = f"이미지 처리 실패: {str(e)}"
+            
+            image_bytes_list.append(None)
     
-    # 2단계: 유효한 이미지들을 Vision API에 전송
-    valid_results = []
-    if valid_images:
+    # 3단계: AI 모델로 유효한 이미지들 분석
+    valid_image_bytes = [img_bytes for img_bytes in image_bytes_list if img_bytes is not None]
+    
+    if valid_image_bytes:
         try:
-            # 검증된 이미지 Base64 데이터들만 추출
-            image_base64_list = [image_base64 for _, _, _, image_base64 in valid_images]
+            # AI 모델 배치 분석
+            ai_results = await analyze_images_with_ai(valid_image_bytes)
             
-            # Vision API 배치 처리
-            vision_results = await analyze_images_batch(image_base64_list)
-            
-            # 결과를 각 이미지에 매핑
-            for (original_index, image_data, result, _), vision_result in zip(valid_images, vision_results):
-                if vision_result.get("error", False):
-                    # Vision API 오류
-                    result.error = True
-                    result.error_type = "api_error"
-                    result.error_message = vision_result.get("message", "Vision API 오류")
-                    summary["errors"] += 1
-                    summary["error_types"]["api_error"] = summary["error_types"].get("api_error", 0) + 1
-                else:
-                    # 성공적으로 처리됨
-                    result.processed = True
+            # 결과를 해당 인덱스에 매핑
+            ai_result_idx = 0
+            for i, img_bytes in enumerate(image_bytes_list):
+                if img_bytes is not None:
+                    ai_result = ai_results[ai_result_idx]
+                    ai_result_idx += 1
                     
-                    # Vision API 결과를 harmful 필드에 직접 반영
-                    result.harmful = vision_result.get("is_harmful", False)
-                    result.category = vision_result.get("category")
-                    result.score = vision_result.get("score")
-                    result.details = vision_result.get("details")
-                    
-                    # 처리 완료 상태 업데이트
-                    result.status = True
-                    
-                    summary["processed"] += 1
-                    if result.harmful:
-                        summary["harmful"] += 1
+                    if ai_result.get("error", False):
+                        # AI 분석 오류
+                        results[i].error = True
+                        results[i].error_type = "ai_error"
+                        results[i].error_message = ai_result.get("message", "AI 분석 오류")
                     else:
-                        summary["safe"] += 1
-                
-                valid_results.append((original_index, result))
+                        # AI 분석 성공
+                        results[i].processed = True
+                        results[i].status = True
+                        results[i].harmful = ai_result.get("is_harmful", False)
+                        results[i].category = ai_result.get("category")
+                        results[i].score = ai_result.get("score")
+                        
+                        # 요약 통계 업데이트
+                        summary.status += 1
+                        if results[i].harmful:
+                            summary.harmful += 1
+                        else:
+                            summary.safe += 1
         
         except Exception as e:
-            # 배치 처리 중 시스템 오류
-            for original_index, image_data, result, _ in valid_images:
-                result.error = True
-                result.error_type = "system_error"
-                result.error_message = f"시스템 오류: {str(e)}"
-                summary["errors"] += 1
-                summary["error_types"]["system_error"] = summary["error_types"].get("system_error", 0) + 1
-                valid_results.append((original_index, result))
+            # AI 분석 전체 실패
+            for i in valid_indices:
+                if not results[i].error:
+                    results[i].error = True
+                    results[i].error_type = "ai_system_error"
+                    results[i].error_message = f"AI 시스템 오류: {str(e)}"
     
-    # 3단계: 모든 결과 합치기 (원래 순서대로)
-    all_results = valid_results + invalid_results
-    all_results.sort(key=lambda x: x[0])  # 원래 순서로 정렬
-    final_results = [result for _, result in all_results]
-    
-    # 전체 메시지 생성
-    message = f"총 {summary['total']}개 이미지 중 {summary['processed']}개 처리 완료"
-    if summary["errors"] > 0:
-        message += f", {summary['errors']}개 오류 발생"
+    # 4단계: 응답 메시지 생성
+    if summary.status > 0:
+        message = f"총 {summary.total}개 이미지 중 {summary.status}개 처리 완료"
+        if summary.harmful > 0:
+            message += f" (유해: {summary.harmful}개, 안전: {summary.safe}개)"
+    else:
+        message = f"총 {summary.total}개 이미지 처리 실패"
     
     return BatchAnalyzeResponse(
-        data={"images": final_results},
+        image=results,
         summary=summary,
         message=message
     )
@@ -139,20 +182,35 @@ async def analyze_images_batch_endpoint(request: BatchAnalyzeRequest):
 @router.get("/health")
 async def health_check():
     """
-    API 상태 및 Vision API 설정 확인
+    API 상태 및 AI 모델 설정 확인
     """
-    from config import config
+    from services.use_ai import ai_model
+    import os
+    
+    # AI 모델 상태 확인
+    ai_status = "loaded" if ai_model.model is not None else "not_loaded"
+    model_exists = ai_model.model_path.exists() if hasattr(ai_model.model_path, 'exists') else False
     
     return {
         "status": "healthy",
-        "environment": config.get_environment(),
-        "vision_api_configured": config.is_configured(),
-        "auth_method": config.get_auth_method(),
+        "ai_model": {
+            "status": ai_status,
+            "model_path": ai_model.model_path,
+            "model_exists": model_exists,
+            "threshold": ai_model.threshold
+        },
         "supported_endpoints": [
-            "/analyze/ (이미지 분석)"
+            "/analyze/ (이미지 분석 - FormData)"
         ],
         "features": [
-            "이미지 분석: Vision API를 통한 유해성 검사 (최대 16개)",
-            "배치 처리: 한 번의 API 호출로 여러 이미지 동시 처리"
-        ]
+            "이미지 분석: AI 모델을 통한 유해성 검사 (최대 20개)",
+            "배치 처리: 비동기 병렬 처리로 성능 최적화",
+            "유해성 판단: 0.6 기준으로 단순 유해성 판단",
+            "FormData 지원: blob 이미지 파일 직접 업로드"
+        ],
+        "limits": {
+            "max_images": 20,
+            "max_file_size": "10MB",
+            "supported_formats": ["JPEG", "PNG", "GIF", "WebP"]
+        }
     }

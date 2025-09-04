@@ -1,7 +1,7 @@
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: image-interceptor-test
+  name: image-interceptor-new1
   annotations:
     run.googleapis.com/ingress: all
     run.googleapis.com/execution-environment: gen2
