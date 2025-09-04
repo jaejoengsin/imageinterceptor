@@ -359,6 +359,26 @@ async function checkTimeAndRefetch() {
     });
   }
 
+async function fetchAndReturnBlobImg(url, refererUrl) {
+  return new Promise(async (resolve, reject) => {
+    try {
+
+      const res = await fetch(url, {
+        headers: {
+          'Referer': refererUrl
+        }
+      });
+      const resBlob = await res.blob();
+      return resolve(resBlob);
+
+    } catch (error) {
+
+      return reject(error);
+    };
+
+  });
+}
+
 
   async function propagateResBodyData(responseData) {
 
@@ -421,22 +441,35 @@ async function checkTimeAndRefetch() {
 
   async function fetchBatch(CsImgData, tabId) {
 
-    console.log("fetchdata:" + CsImgData.length);
-
-    let CsImgDataForFetch = null;
+    //let CsImgDataForFetch = null;
+    let formData = new FormData();
     try {
       const tab = await chrome.tabs.get(tabId);
       const refererUrl = tab.url;
 
-      CsImgDataForFetch = await Promise.all(
+      // CsImgDataForFetch = await Promise.all(
+      //   CsImgData.map(async imgdata => {
+      //     const content = await fetchAndReturnBase64Img(imgdata.url, refererUrl);
+      //     return {
+      //       url: imgdata.url,
+      //       content: content,
+      //       status: imgdata.status,
+      //       harmful: imgdata.harmful
+      //     };
+      //   })
+      // );
+      await Promise.all(
         CsImgData.map(async imgdata => {
-          const content = await fetchAndReturnBase64Img(imgdata.url, refererUrl);
-          return {
-            url: imgdata.url,
-            content: content,
-            status: imgdata.status,
-            harmful: imgdata.harmful
-          };
+          const imgBlob = await fetchAndReturnBlobImg(imgdata.url, refererUrl);
+          const imgMetaJson = Json.stringify(
+            {
+              url: imgdata.url,
+              status: imgdata.status,
+              harmful: imgdata.harmful
+            }
+          );
+          formData.append('images', imgBlob);
+          formData.append('imgMeta', imgMetaJson);
         })
       );
 
@@ -444,21 +477,21 @@ async function checkTimeAndRefetch() {
       console.error("이미지 실제 데이터 fetch 과정 중 에러 발생: ", err);
     }
 
-    const bodyData = JSON.stringify({ data: CsImgDataForFetch });
+    //const bodyData = JSON.stringify({ data: CsImgDataForFetch });
 
     try {
 
       const start = performance.now();
-      console.log("fetch!: ", CsImgDataForFetch.length);
+      console.log("fetch!: ", CsImgData.length);
       const res = await fetch("https://image-interceptor-test-683857194699.asia-northeast3.run.app", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: bodyData
+        body: formData
       });
       if (!res.ok) throw new Error("서버 응답 오류");// catch로 이동
       console.log(`response delaytime: ${(performance.now() - start) / 1000}`);
 
-      const responseBodyData = await res.json()?.then(result => { return result?.data?.images });
+      const responseBodyData = await res.json()?.then(result => { return result?.images });
       if (responseBodyData.length > 0) {
         propagateResBodyData(new Map(responseBodyData.map((el) => {
           return [el.url, { url: el.url, response: true, status: el.status, harmful: el.harmful }];
