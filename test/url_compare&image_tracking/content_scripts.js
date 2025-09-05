@@ -548,3 +548,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console("error ocurr[ =while confirming waiting data from service worker]", e);
   }};
 });
+
+
+
+let interceptorState = true;
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'interceptor-active') {
+    if(message.acitve){
+      alert("프로그램 on");
+    }
+    else{
+      alert("프로그램 off");
+    }
+  }
+});
