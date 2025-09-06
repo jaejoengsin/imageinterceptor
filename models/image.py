@@ -9,6 +9,7 @@ class ImageMeta(BaseModel):
     url: str = Field(..., description="이미지 URL")
     status: bool = Field(default=False, description="처리 상태")
     harmful: bool = Field(default=False, description="유해 여부")
+    level: Optional[int] = Field(default=2, description="필터 강도 (1=약, 2=중, 3=강)")
 
 class ImageResult(BaseModel):
     """처리 결과가 포함된 이미지 데이터"""

@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 FROM python:3.11-slim
 
 # 보안을 위한 비-루트 사용자 생성
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN groupadd -r appuser && useradd -r -g appuser -m appuser
 
 # 작업 디렉토리 설정
 WORKDIR /app
@@ -26,8 +26,10 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # 애플리케이션 코드 복사
 COPY . .
 
-# 파일 소유권 변경
-RUN chown -R appuser:appuser /app
+# 파일 소유권 변경 및 PyTorch 캐시 디렉토리 권한 설정
+RUN chown -R appuser:appuser /app && \
+    mkdir -p /home/appuser/.cache && \
+    chown -R appuser:appuser /home/appuser/.cache
 
 # 비-루트 사용자로 전환
 USER appuser

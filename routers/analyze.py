@@ -25,16 +25,10 @@ async def analyze_images_batch_endpoint(
     FormData 예시:
     formData.append('images', img1.blob, 'image1.jpg');
     formData.append('images', img2.blob, 'image2.jpg');  // 같은 키로 여러 파일
-    formData.append('imgMeta', JSON.stringify({url: "...", status: false, harmful: false}));
-    formData.append('imgMeta', JSON.stringify({url: "...", status: false, harmful: false}));
+    formData.append('imgMeta', JSON.stringify({url: "...", status: false, harmful: false, level: 2}));
+    formData.append('imgMeta', JSON.stringify({url: "...", status: false, harmful: false, level: 3}));
     """
     
-    # 최대 20개 제한 확인
-    if len(images) > 20:
-        raise HTTPException(
-            status_code=400,
-            detail="한 번에 최대 20개 이미지만 처리할 수 있습니다."
-        )
     
     # 이미지와 메타데이터 개수 일치 확인
     if len(images) != len(imgMeta):
@@ -79,10 +73,6 @@ async def analyze_images_batch_endpoint(
             continue
             
         try:
-            # 이미지 파일 크기 제한 (10MB)
-            if image_file.size and image_file.size > 10 * 1024 * 1024:
-                raise ValueError("이미지 크기가 10MB를 초과합니다")
-            
             # 이미지 파일 읽기
             image_bytes = await image_file.read()
             
@@ -124,11 +114,12 @@ async def analyze_images_batch_endpoint(
     
     # 3단계: AI 모델로 유효한 이미지들 분석
     valid_image_bytes = [img_bytes for img_bytes in image_bytes_list if img_bytes is not None]
+    valid_levels = [parsed_meta[i].level for i, img_bytes in enumerate(image_bytes_list) if img_bytes is not None]
     
     if valid_image_bytes:
         try:
-            # AI 모델 배치 분석
-            ai_results = await analyze_images_with_ai(valid_image_bytes)
+            # AI 모델 배치 분석 (level 정보와 함께)
+            ai_results = await analyze_images_with_ai(valid_image_bytes, valid_levels)
             
             # 결과를 해당 인덱스에 매핑
             ai_result_idx = 0
@@ -203,14 +194,13 @@ async def health_check():
             "/analyze/ (이미지 분석 - FormData)"
         ],
         "features": [
-            "이미지 분석: AI 모델을 통한 유해성 검사 (최대 20개)",
+            "이미지 분석: AI 모델을 통한 유해성 검사",
             "배치 처리: 비동기 병렬 처리로 성능 최적화",
             "유해성 판단: 0.6 기준으로 단순 유해성 판단",
             "FormData 지원: blob 이미지 파일 직접 업로드"
         ],
         "limits": {
-            "max_images": 20,
-            "max_file_size": "10MB",
             "supported_formats": ["JPEG", "PNG", "GIF", "WebP"]
         }
     }
+
