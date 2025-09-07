@@ -440,73 +440,60 @@ async function fetchAndReturnBlobImg(url, refererUrl) {
   //         harmful: false
   // }
 
-  async function fetchBatch(CsImgData, tabId) {
 
-    //let CsImgDataForFetch = null;
-    let formData = new FormData();
-    formData.append('filter', json.stringify({level:2}));
-    try {
-      const tab = await chrome.tabs.get(tabId);
-      const refererUrl = tab.url;
+async function fetchBatch(CsImgData, tabId) {
 
-      // CsImgDataForFetch = await Promise.all(
-      //   CsImgData.map(async imgdata => {
-      //     const content = await fetchAndReturnBase64Img(imgdata.url, refererUrl);
-      //     return {
-      //       url: imgdata.url,
-      //       content: content,
-      //       status: imgdata.status,
-      //       harmful: imgdata.harmful
-      //     };
-      //   })
-      // );
-      await Promise.all(
-        CsImgData.map(async imgdata => {
-          const imgBlob = await fetchAndReturnBlobImg(imgdata.url, refererUrl);
-          const imgMetaJson = Json.stringify(
-            {
-              url: imgdata.url,
-              status: imgdata.status,
-              harmful: imgdata.harmful
-            }
-          );
-          formData.append('images', imgBlob);
-          formData.append('imgMeta', imgMetaJson);
-        })
-      );
+  console.log("fetchdata:" + CsImgData.length);
 
-    } catch (err) {
-      console.error("이미지 실제 데이터 fetch 과정 중 에러 발생: ", err);
-    }
+  let CsImgDataForFetch = null;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    const refererUrl = tab.url;
 
-    //const bodyData = JSON.stringify({ data: CsImgDataForFetch });
+    CsImgDataForFetch = await Promise.all(
+      CsImgData.map(async imgdata => {
+        const content = await fetchAndReturnBase64Img(imgdata.url, refererUrl);
+        return {
+          url: imgdata.url,
+          content: content,
+          status: imgdata.status,
+          harmful: imgdata.harmful
+        };
+      })
+    );
 
-    try {
-
-      const start = performance.now();
-      console.log("fetch!: ", CsImgData.length);
-      const res = await fetch("https://image-interceptor-test-683857194699.asia-northeast3.run.app", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: formData
-      });
-      if (!res.ok) throw new Error("서버 응답 오류");// catch로 이동
-      console.log(`response delaytime: ${(performance.now() - start) / 1000}`);
-
-      const responseBodyData = await res.json()?.then(result => { return result?.images });
-      if (responseBodyData.length > 0) {
-        propagateResBodyData(new Map(responseBodyData.map((el) => {
-          return [el.url, { url: el.url, response: true, status: el.status, harmful: el.harmful }];
-        })));
-      } else console.log("cause - fetch response: bodydata 없음");
-    } catch (err) {
-      console.error(
-        err instanceof SyntaxError
-          ? `JSON parsing failed: ${err.message}`
-          : `Request failed: ${err.message}`
-      );
-    }
+  } catch (err) {
+    console.error("이미지 실제 데이터 fetch 과정 중 에러 발생: ", err);
   }
+
+  const bodyData = JSON.stringify({ data: CsImgDataForFetch });
+
+  try {
+
+    const start = performance.now();
+    console.log("fetch!: ", CsImgDataForFetch.length);
+    const res = await fetch("https://image-interceptor-test-683857194699.asia-northeast3.run.app", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: bodyData
+    });
+    if (!res.ok) throw new Error("서버 응답 오류");// catch로 이동
+    console.log(`response delaytime: ${(performance.now() - start) / 1000}`);
+
+    const responseBodyData = await res.json()?.then(result => { return result?.data?.images });
+    if (responseBodyData.length > 0) {
+      propagateResBodyData(new Map(responseBodyData.map((el) => {
+        return [el.url, { url: el.url, response: true, status: el.status, harmful: el.harmful }];
+      })));
+    } else console.log("cause - fetch response: bodydata 없음");
+  } catch (err) {
+    console.error(
+      err instanceof SyntaxError
+        ? `JSON parsing failed: ${err.message}`
+        : `Request failed: ${err.message}`
+    );
+  }
+}
 
 
   
@@ -583,6 +570,10 @@ async function fetchAndReturnBlobImg(url, refererUrl) {
     }
   });
 
+
+
+
+
 function activeInterceptor(flag){
 
   chrome.tabs.query({}, (tabs) => {
@@ -602,23 +593,23 @@ function activeInterceptor(flag){
 }
 
 
-  
-
 //팝업 리스너
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log("onfooooooo");
-  if (true) {
-    try{
-      if(message.active === true){
-        activeInterceptor(true);
+  if(message.source === "popup"){
+   
+    if (true) {
+      try{
+        if(message.active === true){
+          activeInterceptor(true);
+        }
+        else {
+          activeInterceptor(false);
+        }
+      } catch (e){
+        console.error("콘텐츠 스크립트 on/off 에러:"+e);
       }
-      else {
-        activeInterceptor(false);
-      }
-    } catch (e){
-      console.error(e);
+  
     }
-
   }
   return true;
 });

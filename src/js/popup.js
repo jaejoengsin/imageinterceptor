@@ -1,22 +1,22 @@
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', async function () {
 
   const onOffSwitch = document.getElementById('onOffSwitch');
   
-  let savedStatus = localStorage.getItem('interceptorStatus');
-  if (savedStatus === null) {
-    localStorage.setItem('interceptorStatus', '1');
-    savedStatus = '1';
+  const result = await chrome.storage.local.get(['interceptorStatus']);
+  let savedStatus = result.interceptorStatus;
+
+  if (savedStatus === undefined) {
+    chrome.storage.local.set({ 'interceptorStatus': 1 });
+    savedStatus = 1;
   }
   
   
-  onOffSwitch.checked = (savedStatus === '1');
+  onOffSwitch.checked = (savedStatus === 1);
   
-  onOffSwitch.addEventListener('change', function () {
+  onOffSwitch.addEventListener('change', async function () {
     
-
     const isChecked = onOffSwitch.checked;
-    localStorage.setItem('interceptorStatus', isChecked ? '1' : '0');
-
-    chrome.runtime.sendMessage({ active: isChecked });
+    await chrome.storage.local.set({'interceptorStatus': isChecked ? 1 : 0 });
+    chrome.runtime.sendMessage({ active: isChecked, source: 'popup' });
   });
 });
