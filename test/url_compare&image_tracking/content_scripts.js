@@ -36,12 +36,14 @@ if (window.top === window.self) {
  * @param {err} errMessage 
  */
 function terminateContentScript(errMessage) {
-  if (/Extension context invalidated/i.test(errMessage)) console(" extension may be reloaded or disabled. so this contentscript can no longer be operated and will be termainated");
+  if (/Extension context invalidated/i.test(errMessage)) console.error(" extension may be reloaded or disabled. so this contentscript can no longer be operated and will be termainated");
   else {
     console.error("!terminateContentScript becaouse this Error: ", errMessage, " !");
   }
   if (IMGObs) {
     IMGObs.disconntectObeserver();
+    isInterceptorActive = false;
+    console.log("program off");
   }
 }
 
@@ -58,7 +60,7 @@ function maybeFlush() {
 let ALLremoveFalse = 0;
 let ALLremoveTrue = 0;
 function Flush() {
-  if (!dataBuffer.length) return;
+  if (!dataBuffer.length || !isInterceptorActive) return;
   if (!chrome?.runtime) {
     //함수 호출?
     terminateContentScript('can not use chrome.runtime anymore. extension may be reloaded or disabled');
@@ -73,8 +75,7 @@ function Flush() {
       function (response) {
         const err = chrome.runtime.lastError;
         if (err) {
-          terminateContentScript(err.message);
-          throw new Error('chrome.runtime 메세지 송신 중 오류 발생');
+          throw new Error('chrome.runtime 메세지 송신이 불가능합니다. extension을 새로고침하였을 가능성이 높습니다');
         }
 
         const responseBatch = response.data; // 배열 [{ id, url, ... }, ...]
@@ -180,7 +181,7 @@ function Flush() {
         console.log(`누적 합계: ${ALLremoveTrue}/${ALLremoveFalse}/${(ALLremoveTrue + ALLremoveFalse)}[누적 성공/누적 실패/총 누적 합] | 성공률: ${(ALLremoveTrue / (ALLremoveFalse + ALLremoveTrue)).toFixed(2)}`);
       })
   } catch (e) {
-    console.error("erorr occured durring sending message with service worker:  ", e.message);
+    terminateContentScript(e.message);
   }
 }
 
@@ -375,19 +376,23 @@ class imageObservers {
       this.imgViewObserver.disconnect();
       const remainImgs = this.imgObserver.takeRecords();
       this.imgObserver.disconnect();
+      console.log(this.imgIdList.length);
 
-      if(this.imgIdList.length > 0){
+    const maskedImgs = document.querySelectorAll(`img[data-img-id]`);
+    maskedImgs.forEach(img => {
+      img.dataset.masking = "None";
+    });
+      // if(this.imgIdList.length > 0){
 
-        this.imgIdList.forEach(id => {
+      //   this.imgIdList.forEach(id => {
         
-            const img = document.querySelector(`img[data-img-id="${id}"]`);
-            if(img){
-              img.dataset.masking = "None";
-            }
+      //       const img = document.querySelector(`img[data-img-id="${id}"]`);
+      //       if(img){
+      //         img.dataset.masking = "None";
+      //       }
+      //   });
 
-        });
-
-      }
+      // }
   
       if (remainImgs.length > 0) {
         remainImgs.forEach(remainImg => {
@@ -412,8 +417,19 @@ class imageObservers {
   
           });
         });
-
+      
       }
+      // if(dataBuffer.length>0){
+      //   console.log(dataBuffer.length);
+      //   dataBuffer.forEach(item => {
+      //     const id = item.id;
+      //     const img = document.querySelector(`img[data-img-id="${id}"]`);
+      //     if (img) {
+      //       img.dataset.masking = "None";
+      //     }
+
+      //   });
+      // }
   }
 
   reconnectObeserver() {
@@ -429,6 +445,13 @@ class imageObservers {
               this.imgViewObserver.observe(img);
             }
         })
+      }
+      if(dataBuffer.length>0){
+        dataBuffer.forEach(item => {
+          const img = document.querySelector(`img[data-img-id="${id}"]`);
+          if (img) img.dataset.masking = "imgMasking";
+          maybeFlush();
+        });
       }
 
   }
