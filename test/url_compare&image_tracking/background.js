@@ -13,7 +13,7 @@ const BATCH_LIMIT = 16;
 const BATCH_LIMIT_FOR_FETCH = 16;
 const IDLEForDB = 20;
 const IDLEFORFETCH = 100;
-const retryThreshold = 15*1000;
+const retryThreshold = 15 * 1000;
 
 let mustFlush = false;
 let idleTForDB = null;
@@ -122,7 +122,7 @@ let PromiseForInit = (async () => {
 
 
 async function checkCsData(tabId, frameId, batch) {
-  
+
   try {
     await PromiseForInit; //db init 프로미스 기다림. 
   } catch (e) {
@@ -157,7 +157,7 @@ async function checkCsData(tabId, frameId, batch) {
               CsBatchForDBAdd.push(item); //너무 오랫동안 응답을 대기하고 있는 데이터였다면, 재요청 배치에 추가
               value.saveTime = Date.now();
               await reqTablePromise(store.put(value));
-            } 
+            }
             item.tabId = tabId;
             item.frameId = frameId;
             CsBatchForWaiting.set(item.url, item);
@@ -202,7 +202,7 @@ async function checkCsData(tabId, frameId, batch) {
         console.log("이미지 비교중 에러: ", e, "\nURL: ", item.url);
       }
     }));
-   
+
   if (CsBatchForDBAdd?.length != 0) {
 
     const tx = DB.transaction('imgURL', 'readwrite');
@@ -277,7 +277,7 @@ async function sendWaitingCsDataToCs(readyData) {
           { frameId }
         ));
       } catch (e) {
-        console.error("contentscript 응답 오류[type: wating data]: ", e);//Receiving end does not exist → 잠시 후 재시도
+        if (!error.message.includes('Could not establish connection')) console.error("contentscript 응답 오류[type: wating data]: ", e);//Receiving end does not exist → 잠시 후 재시도
       }
 
     }
@@ -302,10 +302,10 @@ async function checkTimeAndRefetch() {
       console.error("table에서 key 조회하고 value 가져오는 중에 Error 발생:", error);
     });
     if (retryThreshold < (Date.now() - dbValue.saveTime)) {
-      if(!reFetchData.get(imgData.tabId)){
-        reFetchData.set(imgData.tabId, [imgData]);  
+      if (!reFetchData.get(imgData.tabId)) {
+        reFetchData.set(imgData.tabId, [imgData]);
       }
-      else{
+      else {
         reFetchData.get(imgData.tabId).push(imgData);
       }
 
@@ -314,7 +314,7 @@ async function checkTimeAndRefetch() {
     }
   }
 
-  for(const [tabId, imgDataArr] of reFetchData){
+  for (const [tabId, imgDataArr] of reFetchData) {
     fetchBatch(imgDataArr, tabId);
   }
   await tx.done?.();
@@ -322,43 +322,43 @@ async function checkTimeAndRefetch() {
 }
 
 
-  /////실험 함수
-  // Blob을 Base64 문자열로 변환하는 헬퍼 함수
-  function blobToBase64(blob) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(blob); // Blob을 읽어 Base64 데이터 URI로 변환 시작
-      reader.onloadend = () => {
-        resolve(reader.result); // 변환 완료 시 Base64 문자열 반환
-      };
-      reader.onerror = (error) => {
-        reject(error); // 에러 발생 시 거부
-      };
-    });
-  }
+/////실험 함수
+// Blob을 Base64 문자열로 변환하는 헬퍼 함수
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(blob); // Blob을 읽어 Base64 데이터 URI로 변환 시작
+    reader.onloadend = () => {
+      resolve(reader.result); // 변환 완료 시 Base64 문자열 반환
+    };
+    reader.onerror = (error) => {
+      reject(error); // 에러 발생 시 거부
+    };
+  });
+}
 
 
-  /////
-  async function fetchAndReturnBase64Img(url, refererUrl) {
-    return new Promise(async (resolve, reject) => {
-      try {
+/////
+async function fetchAndReturnBase64Img(url, refererUrl) {
+  return new Promise(async (resolve, reject) => {
+    try {
 
-        const res = await fetch(url, {
-          headers: {
-            'Referer': refererUrl
-          }
-        });
-        const resBlob = await res.blob();
-        const Base64 = await blobToBase64(resBlob).then(resNotFilterd => { return resNotFilterd.split(',')[1]; });
-        return resolve(Base64);
+      const res = await fetch(url, {
+        headers: {
+          'Referer': refererUrl
+        }
+      });
+      const resBlob = await res.blob();
+      const Base64 = await blobToBase64(resBlob).then(resNotFilterd => { return resNotFilterd.split(',')[1]; });
+      return resolve(Base64);
 
-      } catch (error) {
+    } catch (error) {
 
-        return reject(error);
-      };
+      return reject(error);
+    };
 
-    });
-  }
+  });
+}
 
 async function fetchAndReturnBlobImg(url, refererUrl) {
   return new Promise(async (resolve, reject) => {
@@ -381,64 +381,64 @@ async function fetchAndReturnBlobImg(url, refererUrl) {
 }
 
 
-  async function propagateResBodyData(responseData) {
+async function propagateResBodyData(responseData) {
 
-    updateDB(responseData);
+  updateDB(responseData);
 
-    const readyToSend = new Map(); // tabid : [imgData, ....]
-    for (const [url, imgData] of CsBatchForWaiting) {
-      if (responseData.has(url)) {
-        const imgResData = responseData.get(url);
-        let frames;
-        imgData.status = imgResData.status;
-        imgData.harmful = imgResData.harmful;
-        if (!readyToSend.get(imgData.tabId)) {
-          frames = new Map();
-          frames.set(imgData.frameId, [imgData]);
-          readyToSend.set(imgData.tabId, frames);
+  const readyToSend = new Map(); // tabid : [imgData, ....]
+  for (const [url, imgData] of CsBatchForWaiting) {
+    if (responseData.has(url)) {
+      const imgResData = responseData.get(url);
+      let frames;
+      imgData.status = imgResData.status;
+      imgData.harmful = imgResData.harmful;
+      if (!readyToSend.get(imgData.tabId)) {
+        frames = new Map();
+        frames.set(imgData.frameId, [imgData]);
+        readyToSend.set(imgData.tabId, frames);
 
-        }
-        else {
-          frames = readyToSend.get(imgData.tabId);
-          if (!frames.get(imgData.frameId)) frames.set(imgData.frameId, [imgData]);
-          else frames.get(imgData.frameId).push(imgData);
-        }
-
-        CsBatchForWaiting.delete(url);
       }
+      else {
+        frames = readyToSend.get(imgData.tabId);
+        if (!frames.get(imgData.frameId)) frames.set(imgData.frameId, [imgData]);
+        else frames.get(imgData.frameId).push(imgData);
+      }
+
+      CsBatchForWaiting.delete(url);
     }
-    sendWaitingCsDataToCs(readyToSend);//.then(res => { console.log("response status(WaitingCsData Sended): ", res); })contentscript와 runtimemessage 교신
-    //checkTimeAndRefetch();
-    console.log("현재 기다리고 있는 content: " + CsBatchForWaiting.size);
   }
+  sendWaitingCsDataToCs(readyToSend);//.then(res => { console.log("response status(WaitingCsData Sended): ", res); })contentscript와 runtimemessage 교신
+  //checkTimeAndRefetch();
+  console.log("현재 기다리고 있는 content: " + CsBatchForWaiting.size);
+}
 
 
-  // async function DBFlushByIDLE() {
-  //   await flushBatch();
-  //   if (mustFlush) {
-  //     await fetchBatch();
-  //   };
-  // }
+// async function DBFlushByIDLE() {
+//   await flushBatch();
+//   if (mustFlush) {
+//     await fetchBatch();
+//   };
+// }
 
-  // async function maybeFetch() {
-  //   console.log("maybefetch! |  현재 fetch 예정 data 수: " + batchForFetch.length);
-  //   if (batchForFetch.length >= BATCH_LIMIT_FOR_FETCH) {
-  //     await fetchBatch();
-  //   }
-  //   else {
-  //     await fetchPromise;
-  //   }
-  //   console.log("프로미스 기다림 종료");
-  //   clearTimeout(idleTForFetch);
-  //   idleTForFetch = setTimeout(fetchBatch, IDLEFORFETCH);
-  // }
+// async function maybeFetch() {
+//   console.log("maybefetch! |  현재 fetch 예정 data 수: " + batchForFetch.length);
+//   if (batchForFetch.length >= BATCH_LIMIT_FOR_FETCH) {
+//     await fetchBatch();
+//   }
+//   else {
+//     await fetchPromise;
+//   }
+//   console.log("프로미스 기다림 종료");
+//   clearTimeout(idleTForFetch);
+//   idleTForFetch = setTimeout(fetchBatch, IDLEFORFETCH);
+// }
 
-  // {
-  //   url: item.url,
-  //     content: pureBase64,
-  //       status: false,
-  //         harmful: false
-  // }
+// {
+//   url: item.url,
+//     content: pureBase64,
+//       status: false,
+//         harmful: false
+// }
 
 
 async function fetchBatch(CsImgData, tabId) {
@@ -496,135 +496,224 @@ async function fetchBatch(CsImgData, tabId) {
 }
 
 
-  
-  // REQUEST DATA
-  // [
-  //   {
-  //     canonicalUrl: item.canonicalUrl,
-  //       url: item.url,
-  //         status: false,
-  //           harmful: false
-  //   }
-  // ]
-  // RESPONSE DATA example
-  // {
-  //     "data": [
-  //         {
-  //             "canonicalUrl": "https://www.google.com/pagead/1p-user-list/962985656/?backend=innertube&cname=1&cver=2_20250807&data=backend%3Dinnertube%3Bcname%3D1%3Bcver%3D2_20250807%3Bel%3Dadunit%3Bptype%3Df_adview%3Btype%3Dview%3Butuid%3Dtdz9LWNNQKUg4Xpma_40Ug%3Butvid%3D4ByJ0z3UMNE&is_vtc=0&ptype=f_adview&random=428766496&utuid=tdz9LWNNQKUg4Xpma_40Ug",
-  //             "url": "https://www.google.com/pagead/1p-user-list/962985656/?backend=innertube&cname=1&cver=2_20250807&data=backend%3Dinnertube%3Bcname%3D1%3Bcver%3D2_20250807%3Bel%3Dadunit%3Bptype%3Df_adview%3Btype%3Dview%3Butuid%3Dtdz9LWNNQKUg4Xpma_40Ug%3Butvid%3D4ByJ0z3UMNE&is_vtc=0&ptype=f_adview&random=428766496&utuid=tdz9LWNNQKUg4Xpma_40Ug",
-  //             "status": true,
-  //             "harmful": false,
-  //             "category": "medical",
-  //             "score": 0.4,
-  //             "details": {
-  //                 "adult": 1,
-  //                 "spoof": 1,
-  //                 "medical": 2,
-  //                 "violence": 2,
-  //                 "racy": 2
-  //             },
-  //             "processed": true,
-  //             "error": false,
-  //             "error_message": null,
-  //             "error_type": null
-  //         }
-  //     ],
-  //     "summary": {
-  //         "total": 1,
-  //         "processed": 1,
-  //         "harmful": 0,
-  //         "safe": 1,
-  //         "errors": 0,
-  //         "error_types": {}
-  //     },
-  //     "message": "총 1개 이미지 중 1개 처리 완료 (배치 API 호출: 1회로 1개 이미지 동시 처리)"
-  // }
-  
 
-
-  chrome.tabs.onActivated.addListener(({ tabId }) => {
-    currentTab = tabId;
-  });
+// REQUEST DATA
+// [
+//   {
+//     canonicalUrl: item.canonicalUrl,
+//       url: item.url,
+//         status: false,
+//           harmful: false
+//   }
+// ]
+// RESPONSE DATA example
+// {
+//     "data": [
+//         {
+//             "canonicalUrl": "https://www.google.com/pagead/1p-user-list/962985656/?backend=innertube&cname=1&cver=2_20250807&data=backend%3Dinnertube%3Bcname%3D1%3Bcver%3D2_20250807%3Bel%3Dadunit%3Bptype%3Df_adview%3Btype%3Dview%3Butuid%3Dtdz9LWNNQKUg4Xpma_40Ug%3Butvid%3D4ByJ0z3UMNE&is_vtc=0&ptype=f_adview&random=428766496&utuid=tdz9LWNNQKUg4Xpma_40Ug",
+//             "url": "https://www.google.com/pagead/1p-user-list/962985656/?backend=innertube&cname=1&cver=2_20250807&data=backend%3Dinnertube%3Bcname%3D1%3Bcver%3D2_20250807%3Bel%3Dadunit%3Bptype%3Df_adview%3Btype%3Dview%3Butuid%3Dtdz9LWNNQKUg4Xpma_40Ug%3Butvid%3D4ByJ0z3UMNE&is_vtc=0&ptype=f_adview&random=428766496&utuid=tdz9LWNNQKUg4Xpma_40Ug",
+//             "status": true,
+//             "harmful": false,
+//             "category": "medical",
+//             "score": 0.4,
+//             "details": {
+//                 "adult": 1,
+//                 "spoof": 1,
+//                 "medical": 2,
+//                 "violence": 2,
+//                 "racy": 2
+//             },
+//             "processed": true,
+//             "error": false,
+//             "error_message": null,
+//             "error_type": null
+//         }
+//     ],
+//     "summary": {
+//         "total": 1,
+//         "processed": 1,
+//         "harmful": 0,
+//         "safe": 1,
+//         "errors": 0,
+//         "error_types": {}
+//     },
+//     "message": "총 1개 이미지 중 1개 처리 완료 (배치 API 호출: 1회로 1개 이미지 동시 처리)"
+// }
 
 
 
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  currentTab = tabId;
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (currentTabs.has(tabId)) {
+    currentTabs.delete(tabId);
+  }
+});
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "register_frame") {
+    if (!currentTabs.get(sender?.tab?.id)) {
+      currentTabs.set(sender?.tab?.id, [sender?.frameId]);
+    }
+    else {
+      if (!currentTabs.get(sender?.tab?.id).includes(sender?.frameId)) {
+        currentTabs.get(sender?.tab?.id).push(sender?.frameId);
+      }
+    }
+    sendResponse({ ok: true });
+  }
+});
 
 //콘텐츠 스크립트 리스너
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message?.type === "imgDataFromContentScript") {
-      if (!currentTabs.get(sender?.tab?.id)){
-        currentTabs.set(sender?.tab?.id, [sender?.frameId]);
-      }
-      else{
-        if (!currentTabs.get(sender?.tab?.id).includes(sender?.frameId)){
-          currentTabs.get(sender?.tab?.id).push(sender?.frameId);
-        }
-      }
-      checkCsData(sender?.tab?.id, sender?.frameId, message.data).then(batchFromScript => {
-        sendResponse({
-          type: "response",
-          data: batchFromScript,
-        });
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === "imgDataFromContentScript") {
+    checkCsData(sender?.tab?.id, sender?.frameId, message.data).then(batchFromScript => {
+      sendResponse({
+        type: "response",
+        data: batchFromScript,
       });
-      return true;
-    }
-  });
-
-
-
-
-
-function activeInterceptor(flag){
-
-  chrome.tabs.query({}, (tabs) => {
-    tabs.forEach((tab) => {
-      const frames = currentTabs.get(tab.id);
-      frames?.forEach(frame =>{
-        chrome.tabs.sendMessage(tab.id, { type: 'interceptor-active', active: flag }, { frameId: frame}, (response) => {
-       
-          if (chrome.runtime.lastError) {
-            throw Error(chrome.runtime.lastError.message);
-          }
-        });
-      });
-  
     });
-  });
+    return true;
+  }
+});
+
+
+
+
+
+// function activeInterceptor(flag) {
+
+//   chrome.tabs.query({}, (tabs) => {
+//     tabs.forEach((tab) => {
+//       const frames = currentTabs.get(tab.id);
+//       frames?.forEach(frame => {
+//         chrome.tabs.sendMessage(tab.id, { source: "service_worker", type: 'active_interceptor', active: flag }, { frameId: frame }, (response) => {
+
+//           if (chrome.runtime.lastError) {
+//             throw Error(chrome.runtime.lastError.message + "|" + response.message + "frm content script");
+//           }
+//           else return response.ok;
+//         });
+//       });
+
+//     });
+//   });
+// }
+
+async function activeInterceptor(flag) {
+  const result = { ok: true, message: [] };
+
+  for (const [tabId, frames] of currentTabs) {
+    if (!frames) continue;
+
+    for (const frame of frames) {
+      try {
+        const response = await chrome.tabs.sendMessage(tabId, {
+          source: "service_worker",
+          type: 'active_interceptor',
+          active: flag
+        }, { frameId: frame });
+        if (!response.ok) {
+          result.ok = false;
+        }
+        result.message.push(response.message);
+
+      } catch (error) {
+        if (!error.message.includes('Could not establish connection')) result.ok = false;
+        result.message.push(error.message);
+      }
+    }
+  }
+
+  return result;
 }
+
+
+
+async function setFilterStatus(flag) {
+  const result = { ok: true, message: [] };
+
+  for (const [tabId, frames] of currentTabs) {
+    if (!frames) continue;
+
+    for (const frame of frames) {
+      try {
+        const response = await chrome.tabs.sendMessage(tabId, {
+          source: "service_worker",
+          type: 'set_filter_status',
+          FilterStatus: flag
+        }, { frameId: frame });
+
+        if (!response.ok) {
+          result.ok = false;
+        }
+        result.message.push(response.message);
+
+      } catch (error) {
+        if (!error.message.includes('Could not establish connection')) result.ok = false;
+        result.message.push(error.message);
+      }
+    }
+  }
+  return result;
+}
+//  async function setFilterStatus(flag) {
+
+//   chrome.tabs.query({}, (tabs) => {
+//     tabs.forEach(async (tab) => {
+//       const frames = currentTabs.get(tab.id);    
+//       frames?.forEach(async frame => {
+//         await chrome.tabs.sendMessage(tab.id, { source: "service_worker", type: 'set_filter_status', FilterStatus: flag }, { frameId: frame }, (response) => {
+
+//           if (chrome.runtime.lastError) {
+//             throw Error(chrome.runtime.lastError.message + "|" + response.message + "frm content script");
+//           }
+//           else {
+//             console.log("setFilterStatus: "+response.ok );
+//             return response.ok;
+//           }
+
+
+
+//         });
+//       });
+
+//     });
+//   });
+
+// }
 
 
 //팝업 리스너
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if(message.source === "popup"){
-   
-    if (true) {
-      try{
-        if(message.active === true){
-          activeInterceptor(true);
+  if (message.source === "popup") {
+    (async () => {
+      try {
+        let responseStatus = true;
+        switch (message.type) {
+          case "active_interceptor":
+            console.log("ddd");
+            responseStatus = await activeInterceptor(message.active);
+            if (!responseStatus.ok) console.error(responseStatus.ok);
+            sendResponse({ ok: responseStatus.ok });
+            break;
+
+          case "set_filter_status":
+            responseStatus = await setFilterStatus(message.FilterStatus);
+            if (!responseStatus.ok) console.error(responseStatus.message);
+            sendResponse({ ok: responseStatus.ok });
+            break;
+          default:
+            throw new Error("can not read popup message type");
         }
-        else {
-          activeInterceptor(false);
-        }
-      } catch (e){
-        console.error("콘텐츠 스크립트 on/off 에러:"+e);
+      } catch (e) {
+        console.error(e);
+        sendResponse({ ok: false });
       }
-  
-    }
-  }
-  return true;
-});
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'reload') {
-
+    })();
     return true;
   }
 });
 
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'change_mode') {
-
-    return true;
-  }
-});

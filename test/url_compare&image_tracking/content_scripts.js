@@ -9,6 +9,7 @@ const MAX_N = 16, IDLE = 50;
 let idleT = null;
 let totalimg = 0;
 let isInterceptorActive = true;
+let permissionForMasking = true;
 
 const harmfulImgMark = chrome.runtime.getURL('images/icons/main_icon.png');
 
@@ -105,7 +106,9 @@ function Flush() {
 
                   console.log("유해 이미지: " + item.url);
                   object.style.border = "8px solid red";
-                  object.src = harmfulImgMark;
+                  object.dataset.originalSrc = object.src;
+                  if (permissionForMasking) object.src = harmfulImgMark;
+                  
                   // object.classList.remove('imgMasking');
 
                   object.dataset.masking = "None";
@@ -352,7 +355,8 @@ class imageObservers {
 
       elements.forEach(el => {
         requestAnimationFrame(() => {
-          el.dataset.masking = 'imgMasking';
+          if(permissionForMasking) el.dataset.masking = 'imgMasking';
+          else el.dataset.masking = '';
           // el.classList.add('imgMasking');//다음 렌더 사이클에서 마스킹
           this.imgIdList.push(el.dataset.imgId);
           this.imgViewObserver.observe(el);//렌더링, 레이아웃 정리가 제대로 이루어지지 않은 상태에서 감지될 수 있으므로 한 프레임 쉬고 호출
@@ -371,89 +375,90 @@ class imageObservers {
   }
 
   disconntectObeserver() {
-   
+
     this.IsObsvActive = false;
-      this.imgViewObserver.disconnect();
-      const remainImgs = this.imgObserver.takeRecords();
-      this.imgObserver.disconnect();
-      console.log(this.imgIdList.length);
+    this.imgViewObserver.disconnect();
+    const remainImgs = this.imgObserver.takeRecords();
+    this.imgObserver.disconnect();
+    console.log(this.imgIdList.length);
 
     const maskedImgs = document.querySelectorAll(`img[data-img-id]`);
     maskedImgs.forEach(img => {
       img.dataset.masking = "None";
     });
-      // if(this.imgIdList.length > 0){
+    // if(this.imgIdList.length > 0){
 
-      //   this.imgIdList.forEach(id => {
-        
-      //       const img = document.querySelector(`img[data-img-id="${id}"]`);
-      //       if(img){
-      //         img.dataset.masking = "None";
-      //       }
-      //   });
+    //   this.imgIdList.forEach(id => {
 
-      // }
-  
-      if (remainImgs.length > 0) {
-        remainImgs.forEach(remainImg => {
-          remainImg.addedNodes.forEach(node => {
-            if (node.nodeType !== 1) return;  // element만 처리
-            if (node.tagName === 'IMG') {
-  
-              if (!node.dataset.imgId) {
-                this.imgIdList.push(createRandomImgID(node));
-              }
-              else return;
-  
-            } else {
-  
-              node.querySelectorAll('img').forEach(img => {
-                if (!img.dataset.imgId) {
-                  this.imgIdList.push(createRandomImgID(img));
-                }
-              });
-  
+    //       const img = document.querySelector(`img[data-img-id="${id}"]`);
+    //       if(img){
+    //         img.dataset.masking = "None";
+    //       }
+    //   });
+
+    // }
+
+    if (remainImgs.length > 0) {
+      remainImgs.forEach(remainImg => {
+        remainImg.addedNodes.forEach(node => {
+          if (node.nodeType !== 1) return;  // element만 처리
+          if (node.tagName === 'IMG') {
+
+            if (!node.dataset.imgId) {
+              this.imgIdList.push(createRandomImgID(node));
             }
-  
-          });
-        });
-      
-      }
-      // if(dataBuffer.length>0){
-      //   console.log(dataBuffer.length);
-      //   dataBuffer.forEach(item => {
-      //     const id = item.id;
-      //     const img = document.querySelector(`img[data-img-id="${id}"]`);
-      //     if (img) {
-      //       img.dataset.masking = "None";
-      //     }
+            else return;
 
-      //   });
-      // }
+          } else {
+
+            node.querySelectorAll('img').forEach(img => {
+              if (!img.dataset.imgId) {
+                this.imgIdList.push(createRandomImgID(img));
+              }
+            });
+
+          }
+
+        });
+      });
+
+    }
+    // if(dataBuffer.length>0){
+    //   console.log(dataBuffer.length);
+    //   dataBuffer.forEach(item => {
+    //     const id = item.id;
+    //     const img = document.querySelector(`img[data-img-id="${id}"]`);
+    //     if (img) {
+    //       img.dataset.masking = "None";
+    //     }
+
+    //   });
+    // }
   }
 
   reconnectObeserver() {
 
-      this.IsObsvActive = true;
-      this.imgObserve();
+    this.IsObsvActive = true;
+    this.imgObserve();
 
-      if (this.imgIdList.length > 0) {
-        this.imgIdList.forEach(id => {
-            const img = document.querySelector(`img[data-img-id="${id}"]`);
-            if(img){
-              img.dataset.masking = "imgMasking";
-              this.imgViewObserver.observe(img);
-            }
-        })
-      }
-      if(dataBuffer.length>0){
-        dataBuffer.forEach(item => {
-          const img = document.querySelector(`img[data-img-id="${id}"]`);
-          if (img) img.dataset.masking = "imgMasking";
-          maybeFlush();
-        });
-      }
-
+    if (this.imgIdList.length > 0) {
+      this.imgIdList.forEach(id => {
+        const img = document.querySelector(`img[data-img-id="${id}"]`);
+        if (img) {
+          img.dataset.masking = "imgMasking";
+          this.imgViewObserver.observe(img);
+        }
+      })
+    }
+    if (dataBuffer.length > 0) {
+      dataBuffer.forEach(item => {
+        const img = document.querySelector(`img[data-img-id="${item.id}"]`);
+        if (img) img.dataset.masking = "imgMasking";
+        maybeFlush();
+        
+      });
+    }
+    console.log("observer reconnected");
   }
 }
 
@@ -481,27 +486,35 @@ function Collect_staticImg() {
 //초기화 함수
 async function pageInit() {
   filterModule = await import(chrome.runtime.getURL('test/url_compare&image_tracking/url_filterModule_based_safe_pattern.js'));
-  
-  const result = await chrome.storage.local.get(['interceptorStatus']);
-  let savedStatus = result.interceptorStatus;
+
+  const registerResult = await chrome.runtime.sendMessage({type: "register_frame"});
+  if(!registerResult.ok){
+    console.error("can not register frame to service worker");
+    return;
+  }
+
+  const storedFilterStatus = await chrome.storage.local.get(['filterStatus']);
+  let isFilteringOn = storedFilterStatus.filterStatus;
+  if (isFilteringOn === undefined) {
+    chrome.storage.local.set({ 'filterStatus': true });
+    isFilteringOn = true;
+  }
+  permissionForMasking = isFilteringOn;
+
+  const storedInterceptorStatus = await chrome.storage.local.get(['interceptorStatus']);
+  let savedStatus = storedInterceptorStatus.interceptorStatus;
   if (savedStatus === undefined) {
     chrome.storage.local.set({ 'interceptorStatus': 1 });
     savedStatus = 1;
   }
-  //else alert(savedStatus);
-  
   isInterceptorActive = savedStatus === 1 ? true : false;
-  
+
   if (document.readyState != "loading") {
     IMGObs = new imageObservers;
     if (isInterceptorActive) {
       IMGObs.imgObserve();
       Collect_staticImg();
     }
-  }
-  
-  if (window.self !== window.top){
-    console.log("iframe임");
   }
 
   if (window.top === window.self) {
@@ -559,8 +572,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
                 console.log("유해 이미지: " + item.url);
                 object.style.border = "8px solid red";
-                object.src = harmfulImgMark;
-
+                object.dataset.originalSrc = object.src;
+                if (permissionForMasking) object.src = harmfulImgMark;
                 object.dataset.masking = "None";
 
                 // object.classList.remove('imgMasking');
@@ -644,31 +657,83 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 
+function stopOrStarImgMasking(flag) {
+  console.log("filterstatus"+ flag);
+  if(!flag){
+    const maskedImgs = document.querySelectorAll(`img[data-masking="imgMasking"]`);
+    console.log(maskedImgs.length);
+    maskedImgs.forEach(img => {
+      img.dataset.masking = "None";
+    });
+    
+    console.log("sdfsd");
+    const harmfulImgs = document.querySelectorAll('[data-type*="Harmful"]');
+    console.log(harmfulImgs.length);
+    harmfulImgs.forEach(img => {
+      img.src = img.dataset.originalSrc;
+    });
+  }
+  else { 
+    const harmfulImgs = document.querySelectorAll('[data-type*="Harmful"]');
+    harmfulImgs.forEach(img => {
+      img.src = harmfulImgMark;
+    });
+
+    IMGObs.imgIdList.forEach(id => {
+      const waitingImg = document.querySelector(`img[data-img-id="${id}"]`);
+      if (waitingImg) waitingImg.dataset.masking = "imgMasking";
+    });
+
+    if (dataBuffer.length > 0) {
+      dataBuffer.forEach(item => {
+        const img = document.querySelector(`img[data-img-id="${item.id}"]`);
+        if (img) img.dataset.masking = "imgMasking";
+      });
+    }
+    
+  }
+}
 
 
-
+let count = 0;
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'interceptor-active') {
+  if (message.source === 'service_worker') {
+    console.log("dfd");
     try {
-      console.log(message.active);
-      if (message.active) {
-        IMGObs.reconnectObeserver();
-        isInterceptorActive = true;
-        console.log("program on");
-      }
-      else {
-        IMGObs.disconntectObeserver();
-        isInterceptorActive = false;
-        console.log("program off");
+      switch (message.type) {
+        case 'active_interceptor':
+
+          console.log(message.active);
+          if (message.active) {
+            IMGObs.reconnectObeserver();
+            isInterceptorActive = true;
+            console.log("program on");
+          }
+          else {
+            IMGObs.disconntectObeserver();
+            isInterceptorActive = false;
+            console.log("program off");
+          }
+          sendResponse({ ok: true, message: "success" });
+          break;
+
+        
+        case 'set_filter_status':
+          //observer가 준비되었는지 확인하는 코드 나중에 추가해야 함
+          permissionForMasking = message.FilterStatus;
+          stopOrStarImgMasking(message.FilterStatus);
+        
+          sendResponse({ ok: true, message: "success" });
+          break;
+
+
+        default:
+          throw new Error("can not read message type from service worker");
       }
     } catch (e) {
-      console.log(e);
+      console.error(e);
+      sendResponse({ ok: false, message: e.message});
     }
   }
-  sendResponse({
-    type: "response",
-    ok: true,
-  });
-
-  return true;
 });
+
