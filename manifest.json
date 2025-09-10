@@ -9,6 +9,11 @@
       "default_icon": "images/icons/main_icon.png"
     },
 
+    "icons": {
+      "16": "images/icons/main_icon.png",
+      "32": "images/icons/main_icon.png"
+    },
+
     "content_scripts": [
   {
     "matches": ["<all_urls>"],
@@ -39,7 +44,8 @@
     "matches": ["<all_urls>"]
   }
 ],
-"permissions": ["activeTab","webRequest", "storage", "tabs"]
+"permissions": ["activeTab","webRequest", "storage", "tabs",
+  "contextMenus"]
 
 }
 

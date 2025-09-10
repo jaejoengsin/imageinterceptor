@@ -10,6 +10,8 @@ let idleT = null;
 let totalimg = 0;
 let isInterceptorActive = true;
 let permissionForMasking = true;
+let clickedImg = null;
+
 
 const harmfulImgMark = chrome.runtime.getURL('images/icons/main_icon.png');
 
@@ -657,7 +659,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 
-function stopOrStarImgMasking(flag) {
+function stopOrStarImgsMasking(flag) {
   console.log("filterstatus"+ flag);
   if(!flag){
     const maskedImgs = document.querySelectorAll(`img[data-masking="imgMasking"]`);
@@ -666,7 +668,7 @@ function stopOrStarImgMasking(flag) {
       img.dataset.masking = "None";
     });
     
-    console.log("sdfsd");
+  
     const harmfulImgs = document.querySelectorAll('[data-type*="Harmful"]');
     console.log(harmfulImgs.length);
     harmfulImgs.forEach(img => {
@@ -692,6 +694,27 @@ function stopOrStarImgMasking(flag) {
     }
     
   }
+}
+
+function controlClickedImg(isShow) {
+  
+  if(clickedImg === null) return false;
+  
+  if(isShow){
+    clickedImg.dataset.masking = "None";
+    clickedImg.src = clickedImg.dataset.originalSrc;
+    //harmful을 없애야 함
+    if (clickedImg.dataset.type.includes('Harmful')) clickedImg.dataset.type = clickedImg.dataset.type.replace('Harmful', '').trim();
+  }
+  else {
+    clickedImg.dataset.masking = "None";
+    clickedImg.dataset.originalSrc = clickedImg.src;
+    if (!clickedImg.dataset.type.includes('Harmful')) clickedImg.dataset.type += " Harmful";
+    clickedImg.src = harmfulImgMark;
+  }
+
+  clickedImg === null;
+  return true;
 }
 
 
@@ -721,19 +744,72 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case 'set_filter_status':
           //observer가 준비되었는지 확인하는 코드 나중에 추가해야 함
           permissionForMasking = message.FilterStatus;
-          stopOrStarImgMasking(message.FilterStatus);
-        
+          stopOrStarImgsMasking(message.FilterStatus);
           sendResponse({ ok: true, message: "success" });
-          break;
 
+          break;
+        
+        case 'control_img':
+          if (!isInterceptorActive) sendResponse({ ok: false, message: "interceptor is not active" });
+
+          const result = controlClickedImg(message.isShow);
+          if(!result) throw new Error("can not control single img masking");
+          sendResponse({ ok: true, message: "success" });
+
+          break;
 
         default:
           throw new Error("can not read message type from service worker");
       }
     } catch (e) {
       console.error(e);
-      sendResponse({ ok: false, message: e.message});
+      sendResponse({ ok: false, message: e});
     }
   }
 });
 
+
+//컨텍스트 메뉴 노출//
+document.addEventListener('contextmenu', function (event) {
+
+  if (!isInterceptorActive) return;
+
+  const target = event.target;
+  // 탐색을 위한 큐를 생성
+  const queue = [target];
+  const visited = new Set(); // 중복 방문 방지를 위한 Set
+
+  while (queue.length > 0) {
+    const currentNode = queue.shift(); // 큐의 맨 앞 노드
+    
+    // 이미 방문한 노드는 건너뜀
+    if (visited.has(currentNode)) {
+      continue;
+    }
+    visited.add(currentNode);
+
+    // 현재 노드가 이미지인지 확인
+    if (currentNode.tagName === 'IMG') {
+      clickedImg = currentNode;
+      console.log(currentNode.src);
+      chrome.runtime.sendMessage({
+        type: "imageClicked",
+        imgSrc: currentNode.src,
+        isShow: currentNode.dataset.type.includes('Harmful') ? false : true 
+      });
+      // 이미지를 찾았으므로 탐색을 종료
+      return;
+    }
+
+    // 자식 노드가 있다면 큐에 추가
+    const children = currentNode.children;
+    if (children && children.length > 0) {
+      for (const child of children) {
+        queue.push(child);
+      }
+    }
+  }
+
+  clickedImg = null;
+  
+}, true);

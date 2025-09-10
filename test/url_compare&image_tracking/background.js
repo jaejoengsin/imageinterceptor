@@ -9,6 +9,7 @@ const batchForDB = [];
 // const batchForFetch = [];
 const CsBatchForWaiting = new Map(); // url : {url:asdfas, status: adsfsadf, harmful:fdsafafsda}
 const currentTabs = new Map();
+const controlMenuImgStatusList = new Map();
 const BATCH_LIMIT = 16;
 const BATCH_LIMIT_FOR_FETCH = 16;
 const IDLEForDB = 20;
@@ -24,6 +25,8 @@ let keySet = null;
 let keySetLoaded = false;
 let flushPromise = null;
 let fetchPromise = null;
+let clickedImgSrc = null;
+let isInterceptorActive = true;
 let totalimg = 0;
 
 
@@ -541,16 +544,126 @@ async function fetchBatch(CsImgData, tabId) {
 // }
 
 
+const contextControlMenu = {
+  'ImgShow': '이미지 보이기',
+  'ImgHide': '이미지 감추기',
+}
 
-chrome.tabs.onActivated.addListener(({ tabId }) => {
-  currentTab = tabId;
-});
+//documentUrlPatterns -  추후 추가? 
+chrome.runtime.onInstalled.addListener(async () => {
 
-chrome.tabs.onRemoved.addListener((tabId) => {
-  if (currentTabs.has(tabId)) {
-    currentTabs.delete(tabId);
+  chrome.contextMenus.create({
+    id: 'mainControlMenu',
+    title: 'ImageInterceptor - 유해 이미지 차단 프로그램',
+    contexts: ['all']
+  });
+
+  for (const [menuId, menuTitle] of Object.entries(contextControlMenu)) {
+    chrome.contextMenus.create({
+      id: menuId,
+      parentId: 'mainControlMenu',
+      title: menuTitle,
+      type: 'radio',
+      contexts: ['all']
+    });
+
+    const storedInterceptorStatus = await chrome.storage.local.get(['interceptorStatus']);
+    let savedStatus = storedInterceptorStatus.interceptorStatus;
+    if (savedStatus === undefined) {
+      chrome.storage.local.set({ 'interceptorStatus': 1 });
+      savedStatus = 1;
+    }
+    isInterceptorActive = savedStatus === 1 ? true : false;
+    chrome.contextMenus.update('mainControlMenu', { enabled: isInterceptorActive });
+
+
   }
+  return true;
 });
+
+// 콘텐츠 스크립트로부터 메시지 수신
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "imageClicked" && message.imgSrc) {
+
+    (async () => {
+      chrome.contextMenus.removeAll(() => {
+  
+        chrome.contextMenus.create({
+          id: 'mainControlMenu',
+          title: 'ImageInterceptor - 유해 이미지 차단 프로그램',
+          contexts: ['all']
+        });
+  
+        for (const [menuId, menuTitle] of Object.entries(contextControlMenu)) {
+          chrome.contextMenus.create({
+            id: menuId,
+            parentId: 'mainControlMenu',
+            title: menuTitle,
+            type: 'radio',
+            contexts: ['all']
+          });
+        }
+        
+
+        
+        if (!controlMenuImgStatusList.has(message.imgSrc)){
+          controlMenuImgStatusList.set(message.imgSrc, message.isShow === true ? 'ImgShow' : 'ImgHide');
+          chrome.contextMenus.update(message.isShow === true ? 'ImgShow' : 'ImgHide', { checked: true });
+          console.log("new img");
+        }
+        else {
+          const anotherItemStatus = controlMenuImgStatusList.get(message.imgSrc) === 'ImgShow' ? 'ImgHide' : 'ImgShow';
+          chrome.contextMenus.update(controlMenuImgStatusList.get(message.imgSrc) === 'ImgShow' ? 'ImgShow' : 'ImgHide', { checked: true });
+      
+          console.log("img 존재: " + message.imgSrc);
+        }
+
+        clickedImgSrc = message.imgSrc;
+
+        return true;
+
+        });
+    })();
+    return true;
+  }
+}); 
+
+chrome.contextMenus.onClicked.addListener((item, tab) => {
+
+  if (clickedImgSrc === null) {
+    chrome.contextMenus.update('ImgShow', { checked: true });
+    return;
+  }  
+  
+  const controlId = item.menuItemId;
+  const imgInfo = { tabId: tab.id, frameId: item.frameId, url: item.srcUrl };
+  
+  if (controlId === controlMenuImgStatusList.get(clickedImgSrc)) return;
+  
+  try {
+    const response = chrome.tabs.sendMessage(imgInfo.tabId, {
+      source: "service_worker",
+      type: 'control_img',
+      isShow: controlId === 'ImgShow' ? true : false
+    }, { frameId: imgInfo.frameId });
+    
+    if (!response.ok) {
+      throw new Error(response.message);
+    }
+    
+    controlMenuImgStatusList.set(clickedImgSrc, controlId);
+    clickedImgSrc = null;
+    
+  } catch (error) {
+    if (!error.message.includes('Could not establish connection')) console.error(error.message);
+    chrome.contextMenus.update('ImgShow', { checked: true });
+  }
+  return true;
+
+});
+
+
+
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "register_frame") {
@@ -694,9 +807,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         let responseStatus = true;
         switch (message.type) {
           case "active_interceptor":
-            console.log("ddd");
             responseStatus = await activeInterceptor(message.active);
             if (!responseStatus.ok) console.error(responseStatus.ok);
+            isInterceptorActive = message.active;
+            chrome.contextMenus.update('mainControlMenu', { enabled: isInterceptorActive ? true : false });
             sendResponse({ ok: responseStatus.ok });
             break;
 
