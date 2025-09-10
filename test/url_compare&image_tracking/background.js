@@ -641,21 +641,23 @@ chrome.contextMenus.onClicked.addListener((item, tab) => {
   if (controlId === controlMenuImgStatusList.get(clickedImgSrc)) return;
   
   try {
-    const response = chrome.tabs.sendMessage(imgInfo.tabId, {
+    //추부 promise추가
+    const response =chrome.tabs.sendMessage(imgInfo.tabId, {
       source: "service_worker",
       type: 'control_img',
       isShow: controlId === 'ImgShow' ? true : false
     }, { frameId: imgInfo.frameId });
     
     if (!response.ok) {
-      throw new Error(response.message);
+      console.log(response.message);
+      //throw new Error(response.message);
     }
     
     controlMenuImgStatusList.set(clickedImgSrc, controlId);
     clickedImgSrc = null;
     
   } catch (error) {
-    if (!error.message.includes('Could not establish connection')) console.error(error.message);
+    if (!error.message.includes('Could not establish connection')) console.error(error);
     chrome.contextMenus.update('ImgShow', { checked: true });
   }
   return true;

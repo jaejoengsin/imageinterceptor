@@ -50,6 +50,24 @@ function terminateContentScript(errMessage) {
   }
 }
 
+//유해이미지 적용/해제//
+function changeImg(img,flag){
+  if(flag){
+    img.src = harmfulImgMark;
+    img.style.backgroundColor = 'white';
+    img.style.objectFit = 'contain';
+    img.style.objectPosition = 'center';
+  }
+  else {
+    img.style.backgroundColor = '';
+    img.style.objectFit = '';
+    img.style.objectPosition = '';
+    img.src = img.dataset.originalSrc;
+    
+}
+
+}
+
 
 
 function maybeFlush() {
@@ -107,9 +125,16 @@ function Flush() {
                   // object.style.removeProperty('opacity');
 
                   console.log("유해 이미지: " + item.url);
-                  object.style.border = "8px solid red";
+                  //object.style.border = "8px solid red";
                   object.dataset.originalSrc = object.src;
-                  if (permissionForMasking) object.src = harmfulImgMark;
+                  if (permissionForMasking) {
+                    changeImg(object, true);
+                    // myImage.style.backgroundColor = 'white';
+                    // myImage.style.objectFit = 'contain';
+                    // imageElement.style.objectPosition = 'center'; 
+                    // object.src = harmfulImgMark;
+
+                  }
                   
                   // object.classList.remove('imgMasking');
 
@@ -141,7 +166,7 @@ function Flush() {
                   object.dataset.masking = "None";
 
                   console.log("성공 id: " + item.id);
-                  object.style.border = "8px solid blue";
+                  //object.style.border = "8px solid blue";
 
                 }
                 else {
@@ -164,7 +189,7 @@ function Flush() {
 
                 // object.classList.remove('imgMasking');
                 console.log("성공 id: " + item.id);
-                object.style.border = "8px solid blue";
+                //object.style.border = "8px solid blue";
 
               }
               else {
@@ -573,9 +598,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 // object.style.removeProperty('opacity');
 
                 console.log("유해 이미지: " + item.url);
-                object.style.border = "8px solid red";
+                //object.style.border = "8px solid red";
                 object.dataset.originalSrc = object.src;
-                if (permissionForMasking) object.src = harmfulImgMark;
+                if (permissionForMasking) {
+                  changeImg(object, true);
+                  // object.src = harmfulImgMark;
+                }
                 object.dataset.masking = "None";
 
                 // object.classList.remove('imgMasking');
@@ -605,7 +633,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
                 // object.classList.remove('imgMasking');
                 console.log("성공 id: " + item.id);
-                object.style.border = "8px solid blue";
+                //object.style.border = "8px solid blue";
 
               }
               else {
@@ -628,7 +656,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
               // object.classList.remove('imgMasking');
               console.log("성공 id: " + item.id);
-              object.style.border = "8px solid blue";
+              //object.style.border = "8px solid blue";
 
             }
             else {
@@ -672,13 +700,15 @@ function stopOrStarImgsMasking(flag) {
     const harmfulImgs = document.querySelectorAll('[data-type*="Harmful"]');
     console.log(harmfulImgs.length);
     harmfulImgs.forEach(img => {
-      img.src = img.dataset.originalSrc;
+      changeImg(img, false);
+      //img.src = img.dataset.originalSrc;
     });
   }
   else { 
     const harmfulImgs = document.querySelectorAll('[data-type*="Harmful"]');
     harmfulImgs.forEach(img => {
-      img.src = harmfulImgMark;
+      //img.src = harmfulImgMark;
+      changeImg(img, true);
     });
 
     IMGObs.imgIdList.forEach(id => {
@@ -702,7 +732,8 @@ function controlClickedImg(isShow) {
   
   if(isShow){
     clickedImg.dataset.masking = "None";
-    clickedImg.src = clickedImg.dataset.originalSrc;
+    changeImg(clickedImg, false);
+    //clickedImg.src = clickedImg.dataset.originalSrc;
     //harmful을 없애야 함
     if (clickedImg.dataset.type.includes('Harmful')) clickedImg.dataset.type = clickedImg.dataset.type.replace('Harmful', '').trim();
   }
@@ -710,7 +741,8 @@ function controlClickedImg(isShow) {
     clickedImg.dataset.masking = "None";
     clickedImg.dataset.originalSrc = clickedImg.src;
     if (!clickedImg.dataset.type.includes('Harmful')) clickedImg.dataset.type += " Harmful";
-    clickedImg.src = harmfulImgMark;
+    changeImg(clickedImg, true);
+    //clickedImg.src = harmfulImgMark;
   }
 
   clickedImg === null;
@@ -721,7 +753,7 @@ function controlClickedImg(isShow) {
 let count = 0;
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.source === 'service_worker') {
-    console.log("dfd");
+    
     try {
       switch (message.type) {
         case 'active_interceptor':
@@ -753,6 +785,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (!isInterceptorActive) sendResponse({ ok: false, message: "interceptor is not active" });
 
           const result = controlClickedImg(message.isShow);
+          console.log(result);
           if(!result) throw new Error("can not control single img masking");
           sendResponse({ ok: true, message: "success" });
 
