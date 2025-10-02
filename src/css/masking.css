@@ -1,0 +1,50 @@
+/* styles/masking.css */
+/* 모든 이미지 요소를 숨깁니다. 필요에 따라 다른 마스킹 효과를 적용할 수 있습니다. */
+[data-masking="imgMasking"] {
+  visibility: hidden !important; /* 요소를 숨기지만 공간은 차지 */
+  /*display: none !important; /* 요소를 숨기고 공간도 차지하지 않게 합니다. */
+  opacity: 0 !important;  /* 요소를 투명하게 만들지만 공간은 차지 */
+  background-color: blue !important; /* 배경색으로 가리는 방법 */
+}
+
+ 
+
+ 
+ html  {
+  /*visibility: hidden !important; /* 요소를 숨기지만 공간은 차지 */
+  /*display: none !important; /* 요소를 숨기고 공간도 차지하지 않게 합니다. */
+  /*opacity: 0 !important; /* 요소를 투명하게 만들지만 공간은 차지 */
+  /*background-color: blue !important; /* 배경색으로 가리는 방법 */
+  /*pointer-events: none; */
+}
+
+#extensionOverlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important; /* 뷰포트 너비 */
+  height: 100vh !important; /* 뷰포트 높이 */
+  z-index: 999999 !important; /* 다른 모든 콘텐츠 위에 오도록 매우 높게 설정 */
+  
+  /* 원하는 배경 스타일 */
+  background-color: white !important; 
+  /* background-image: url('chrome-extension://figlemailhemmegcpfjfhjooegknoooh/images/icons/icon2.png') !important;  */
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  background-position: center center !important;
+
+  opacity: 1 !important; /* 오버레이는 보이도록 */
+  pointer-events: none !important; /* 오버레이 위에서 클릭이 안되도록 막음 */
+  transition: opacity 0.5s ease-out; 
+
+}
+
+#extensionOverlay.fade-out {
+      opacity: 0 !important; /* !important를 사용하여 다른 스타일보다 우선하도록 */
+  }
+
+/* 
+div[style*="background-image"],
+span[style*="background-image"] {
+  background-image: none !important;
+} */
