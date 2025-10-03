@@ -1,13 +1,9 @@
-import {harmfulImgMark, changeImg} from './contentCommon.js';
-import {permissionForMasking} from '../content.js';
+import {changeImg} from './contentUtils.js';
+import {getPermissionForMasking} from '../global/contentConfig.js';
 
 
 let ALLremoveFalse = 0;
 let ALLremoveTrue = 0;
-
-
-
-
 export function trackAndReplaceImg(responseFromSW) {
 
 
@@ -38,7 +34,7 @@ export function trackAndReplaceImg(responseFromSW) {
                         console.log("유해 이미지: " + item.url);
                         //object.style.border = "8px solid red";
                         object.dataset.originalSrc = object.src;
-                        if (permissionForMasking) {
+                        if (getPermissionForMasking()) {
                             changeImg(object, true);
                             // myImage.style.backgroundColor = 'white';
                             // myImage.style.objectFit = 'contain';

@@ -1,8 +1,7 @@
 
-import {updateDB } from './../indexDb.js';
-import {checkTimeAndRefetch} from './requestImgAnalyze.js';
-
-export const CsBatchForWaiting = new Map(); // url : {url:asdfas, status: adsfsadf, harmful:fdsafafsda}
+import {updateDB } from '../modules/indexDb.js';
+import {checkTimeAndRefetch} from '../modules/requestImgAnalyze.js';
+import { CsBatchForWaiting } from '../global/backgroundConfig.js';
 
 
 export async function propagateResBodyData(responseData) {
@@ -32,7 +31,7 @@ export async function propagateResBodyData(responseData) {
         }
     }
     sendWaitingCsDataToCs(readyToSend);//.then(res => { console.log("response status(WaitingCsData Sended): ", res); })contentscript와 runtimemessage 교신
-    //checkTimeAndRefetch();
+    checkTimeAndRefetch();
     console.log("현재 기다리고 있는 content: " + CsBatchForWaiting.size);
 }
 

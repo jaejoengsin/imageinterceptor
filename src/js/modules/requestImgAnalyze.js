@@ -1,7 +1,8 @@
-import { propagateResBodyData} from './propagate.js';
-import {DB, reqTablePromise} from '../indexDb.js';
+import { propagateResBodyData} from '../utils/propagate.js';
+import {DB, reqTablePromise} from './indexDb.js';
+import { CsBatchForWaiting } from '../global/backgroundConfig.js';
 
- 
+const retryThreshold = 15 * 1000;
 
 // export async function fetchBatch(CsImgData, tabId) {
 

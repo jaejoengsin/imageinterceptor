@@ -1,7 +1,7 @@
 
-import * as indexDb from './indexDb.js';
-import { CsBatchForWaiting } from './utils/propagate.js';
-import { fetchBatch } from './utils/requestImgAnalyze.js';
+import * as indexDb from './modules/indexDb.js';
+import { CsBatchForWaiting } from './global/backgroundConfig.js';
+import { fetchBatch } from './modules/requestImgAnalyze.js';
 
 
 const currentTabs = new Map();
@@ -136,7 +136,7 @@ async function checkCsData(tabId, frameId, batch) {
 
   await tx.done?.();
 
-  const delay = await new Promise(resolve => setTimeout(resolve, 200));
+  //const delay = await new Promise(resolve => setTimeout(resolve, 200));
 
   csBatchForResponse = csBatchForResponse.filter(x => x !== undefined);
   console.log('Receiving  request:', batch);
