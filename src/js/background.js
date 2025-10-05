@@ -2,7 +2,7 @@
 import * as indexDb from './modules/indexDb.js';
 import { CsBatchForWaiting } from './global/backgroundConfig.js';
 import { fetchBatch } from './modules/requestImgAnalyze.js';
-
+import {setNumOfHarmfulImgInStorageSession, initNumOfHarmfulImgInStorageSession} from './utils/backgroundUtils.js'
 
 const currentTabs = new Map();
 const controlMenuImgStatusList = new Map();
@@ -20,7 +20,7 @@ let storedInterceptorStatus = null;
 //
 let totalimg = 0;
 let interceptorSite = null;
-
+let totalNumOfHarmfulImg;
 
 
 
@@ -28,10 +28,18 @@ let interceptorSite = null;
 //비동기 준비 작업이 완료되어야 다음 코드를 실행할 수 있는 프로마이스 객체(resolved가 반환되어야 함). 함수 자체는 바로 실행
 let PromiseForInit = indexDb.initIndexDb();
 
+function getPageUrlFromTabId(tabId) {
+  return new Promise((resolve,reject) => {
+    chrome.tabs.get(tabId, (tab) => {
+       if (chrome.runtime.lastError) reject(chrome.runtime.lastError.message);
+       else resolve(tab.url);
+    });
+  })
+}
 
 
 async function checkCsData(tabId, frameId, batch) {
-
+  
   try {
     await PromiseForInit; //db init 프로미스 기다림. 
   } catch (e) {
@@ -39,22 +47,28 @@ async function checkCsData(tabId, frameId, batch) {
     return;
   }
 
-  const tx = indexDb.DB.transaction('imgURL', 'readwrite');
-  const store = tx.objectStore('imgURL');
-
-
+  
+  
+  
+  const pageUrl = await getPageUrlFromTabId(tabId).then(pageUrl=>pageUrl).catch(err=>{console.error(err);});
+  
+  
   const CsBatchForDBAdd = [];
-
+  
+  let numOfHarmfulImg = 0;
+  
   let csBatchForResponse = await Promise.all(
-
+    
     batch.map(async (item) => {
+      const tx = indexDb.DB.transaction('imgURL', 'readwrite');
+      const store = tx.objectStore('imgURL');
       try {
 
         if (indexDb.keySet.has(item.url)) {
-
+          
 
           const value = await indexDb.reqTablePromise(store.get(item.url)).then(result => {
-            console.log("table에서 key 조회하고 value 가져오기 성공");
+           
             return result;
           }).catch(error => {
             console.error("table에서 key 조회하고 value 가져오는 중에 Error 발생:", error.message);
@@ -69,13 +83,14 @@ async function checkCsData(tabId, frameId, batch) {
             }
             item.tabId = tabId;
             item.frameId = frameId;
-            CsBatchForWaiting.set(item.url, item);
+            CsBatchForWaiting.set([pageUrl,item.url], item);
           }
           else {
             console.log("데이터 베이스에 있는 img id: " + item.id + "상태/유해/응답: " + value.status + "&" + value.harmful + "&" + value.response);
             if (value.status) {
               item.status = true;
               if (value.harmful) {
+                numOfHarmfulImg++;
                 item.harmful = true;
               }
             }
@@ -101,7 +116,7 @@ async function checkCsData(tabId, frameId, batch) {
 
             item.tabId = tabId;
             item.frameId = frameId;
-            CsBatchForWaiting.set(item.url, item); //fetch할 데이터도 결국 response = false인 데이터와 함께 csbatchforwaiting에서 기다림
+            CsBatchForWaiting.set([pageUrl,item.url], item); //fetch할 데이터도 결국 response = false인 데이터와 함께 csbatchforwaiting에서 기다림
 
             CsBatchForDBAdd.push(item);
           }
@@ -134,7 +149,9 @@ async function checkCsData(tabId, frameId, batch) {
     //db 추가했으니 fetch.
   }
 
-  await tx.done?.();
+  //console.log("pageCountInfo\n"+pageUrl+'\n'+numOfHarmfulImg);
+  setNumOfHarmfulImgInStorageSession(pageUrl, numOfHarmfulImg);
+
 
   //const delay = await new Promise(resolve => setTimeout(resolve, 200));
 
@@ -143,7 +160,6 @@ async function checkCsData(tabId, frameId, batch) {
   console.log('Sending response:', csBatchForResponse);
   return csBatchForResponse; //받은 배치 중에서 바로 응답할 이미지 객체만 넣어서 return
 }
-
 
 
 
@@ -173,6 +189,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               currentTabs.get(sender?.tab?.id).push(sender?.frameId);
             }
           }
+
+          getPageUrlFromTabId(sender?.tab?.id).then(pageUrl=>{
+            console.log(pageUrl);
+            initNumOfHarmfulImgInStorageSession(pageUrl);
+          }).catch(err=>{console.error(err);});
+
           sendResponse({ ok: true });
           break;
 
@@ -270,29 +292,31 @@ chrome.runtime.onInstalled.addListener(async () => {
       type: 'radio',
       contexts: ['all']
     });
-
-    storedInterceptorStatus = await chrome.storage.local.get(['interceptorStatus']);
-    let savedStatus = storedInterceptorStatus.interceptorStatus;
-    if (savedStatus === undefined) {
-      chrome.storage.local.set({ 'interceptorStatus': 1 });
-      savedStatus = 1;
-    }
-    isInterceptorActive = savedStatus === 1 ? true : false;
-    chrome.contextMenus.update('mainControlMenu', { enabled: isInterceptorActive });
-
-
-    const storedInterceptorSite = await chrome.storage.local.get(['interceptorSite']);
-    if (storedInterceptorSite === undefined || storedInterceptorSite.interceptorSite === undefined) {
-      chrome.storage.local.set({ 'interceptorSite': {} });
-      interceptorSite = new Map();
-    }
-    else {
-      interceptorSite = new Map(Object.entries(storedInterceptorSite.interceptorSite));
-    }
-
-
-
   }
+  storedInterceptorStatus = await chrome.storage.local.get(['interceptorStatus']);
+  let savedStatus = storedInterceptorStatus.interceptorStatus;
+  if (savedStatus === undefined) {
+    chrome.storage.local.set({ 'interceptorStatus': 1 });
+    savedStatus = 1;
+  }
+  isInterceptorActive = savedStatus === 1 ? true : false;
+  chrome.contextMenus.update('mainControlMenu', { enabled: isInterceptorActive });
+
+
+  const storedInterceptorSite = await chrome.storage.local.get(['interceptorSite']);
+  if (storedInterceptorSite === undefined || storedInterceptorSite.interceptorSite === undefined) {
+    chrome.storage.local.set({ 'interceptorSite': {} });
+    interceptorSite = new Map();
+  }
+  else {
+    interceptorSite = new Map(Object.entries(storedInterceptorSite.interceptorSite));
+  }  
+
+  chrome.storage.local.get(['totalNumOfHarmfulImg']).then(result => {
+    if (!result.totalNumOfHarmfulImg) {
+      chrome.storage.local.set({ 'totalNumOfHarmfulImg': 0 });}
+  });
+
   return true;
 });
 

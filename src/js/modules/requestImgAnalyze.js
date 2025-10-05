@@ -128,8 +128,8 @@ export async function checkTimeAndRefetch() {
   const reFetchData = new Map();
 
   for (const [url, imgData] of CsBatchForWaiting) {
-    let dbValue = await reqTablePromise(store.get(url)).then(result => {
-      console.log("table에서 key 조회하고 value 가져오기 성공");
+    let dbValue = await reqTablePromise(store.get(url[1])).then(result => {
+      
       return result;
     }).catch(error => {
       console.error("table에서 key 조회하고 value 가져오는 중에 Error 발생:", error);
@@ -154,6 +154,8 @@ export async function checkTimeAndRefetch() {
 
 }
 
+//createImageBitmap으로 지원 안하는 이미지: svg
+//image 객체를 생성해서 우회적으로 해결해야 함. 그러나 비유해 이미지 필터에서 해당 유형의 이미지를 미리 걸러낼 예정이기 때문에 현재 수정 안한 상태
 async function resizeAndSendBlob(blob, width, height) {
     // Blob을 ImageBitmap으로 변환
     const imageBitmap = await createImageBitmap(blob);
@@ -179,6 +181,7 @@ export async function fetchBatch(CsImgData, tabId) {
 
   //let CsImgDataForFetch = null;
   let formData = new FormData();
+  
   try {
     const tab = await chrome.tabs.get(tabId);
     const refererUrl = tab.url;
@@ -197,7 +200,14 @@ export async function fetchBatch(CsImgData, tabId) {
     await Promise.all(
       CsImgData.map(async imgdata => {
         const imgBlob = await fetchAndReturnBlobImg(imgdata.url, refererUrl);
-        const resizedImgBlob = await resizeAndSendBlob(imgBlob, 224, 224);
+        let resizedImgBlob;
+
+        try{
+          resizedImgBlob = await resizeAndSendBlob(imgBlob, 224, 224);
+        }
+        catch(err){
+          throw new Error("| resize과정에서 오류 발생 "+ err);
+        }
         const imgMetaJson = JSON.stringify(
           {
             url: imgdata.url,
@@ -212,7 +222,7 @@ export async function fetchBatch(CsImgData, tabId) {
     );
 
   } catch (err) {
-    console.error("이미지 실제 데이터 fetch 과정 중 에러 발생: ", err);
+    console.error("body data 처리 및 준비 과정 중 에러 발생:", err);
   }
 
   //const bodyData = JSON.stringify({ data: CsImgDataForFetch });
@@ -230,10 +240,14 @@ export async function fetchBatch(CsImgData, tabId) {
 
     const responseBodyData = await res.json()?.then(result => { return result?.image });
     if (responseBodyData.length > 0) {
-      propagateResBodyData(new Map(responseBodyData.map((el) => {
+
+      const processedResBodyData = new Map(responseBodyData.map((el) => {
         return [el.url, { url: el.url, response: true, status: el.status, harmful: el.harmful }];
-      })));
-    } else console.log("cause - fetch response: bodydata 없음");
+      }));
+
+      propagateResBodyData(processedResBodyData);
+
+    } else throw new Error("cause - fetch response: bodydata 없음");
   } catch (err) {
     console.error(
       err instanceof SyntaxError

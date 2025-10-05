@@ -1,5 +1,5 @@
 import '../css/popup.css';
-
+import {getNumOfHarmfulImgInthispage} from './utils/backgroundUtils.js';
 
 function getCurrentPageUrl() {
   return new Promise((resolve, reject) => {
@@ -19,6 +19,17 @@ function getCurrentPageUrl() {
   });
 }
 
+async function loadNumOfHarmfulImg() {
+  const pageNumDom = document.getElementById("page-count");
+  const totalNumDom = document.getElementById("total-count");
+  
+  const currentPageUrl = await getCurrentPageUrl().then(result =>result.href);
+  const pageNum = await getNumOfHarmfulImgInthispage(currentPageUrl);
+  const totalNum = await chrome.storage.local.get(['totalNumOfHarmfulImg']).then(result => { return result.totalNumOfHarmfulImg; });
+  console.log(totalNum);
+  pageNumDom.textContent = pageNum;
+  totalNumDom.textContent = totalNum;
+}
 
 
 
@@ -125,6 +136,9 @@ document.addEventListener('DOMContentLoaded', async function () {
 
 
   onOffSwitch.checked = (savedStatus === 1);
+
+
+  loadNumOfHarmfulImg();
 
   //EVENT LISTNER//
   onOffSwitch.addEventListener('change', async function () {

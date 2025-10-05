@@ -6,6 +6,7 @@ export let keySetLoaded = false;
 
 export  async function initIndexDb() {
     try {
+        await deleteImageUrlDB();//나중에 삭제해야 함. 서비스 워커 초기화하면 무조건 기존 db 삭제
         DB = await openImageUrlDB();
         await loadKeySet(DB);
         console.log("db로드완료");
@@ -58,6 +59,31 @@ export function openImageUrlDB() {
     });
 }
 
+export function deleteImageUrlDB() {
+    return new Promise((resolve, reject) => {
+        // IndexedDB의 deleteDatabase 메서드를 사용하여 데이터베이스를 삭제합니다.
+        const request = indexedDB.deleteDatabase('imageUrlDB');
+
+        // 삭제 성공 시 호출되는 이벤트 핸들러
+        request.onsuccess = () => {
+            console.log('데이터베이스가 성공적으로 삭제되었습니다.');
+            resolve();
+        };
+
+        // 삭제 실패 시 호출되는 이벤트 핸들러
+        request.onerror = (event) => {
+            reject('데이터베이스 삭제 오류:', event.target.error);
+        };
+
+        // 데이터베이스가 다른 탭에서 열려 있어 삭제가 차단될 때 호출되는 이벤트 핸들러
+        request.onblocked = () => {
+            console.warn('데이터베이스가 다른 연결에 의해 차단되었습니다.');
+            reject('데이터베이스가 다른 연결에 의해 차단되었습니다.');
+        };
+    });
+}
+
+
 
 export function getAllKeysPromise(store) {
     return new Promise((resolve, reject) => {
@@ -103,7 +129,7 @@ export async function updateDB(responseData) {
 
     for (const [url, imgResData] of responseData) {
         let dbValue = await reqTablePromise(store.get(url)).then(result => {
-            console.log("table에서 key 조회하고 value 가져오기 성공");
+            
             return result;
         }).catch(error => {
             console.error("table에서 key 조회하고 value 가져오는 중에 Error 발생:", error);
