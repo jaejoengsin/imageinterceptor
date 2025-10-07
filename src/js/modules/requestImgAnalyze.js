@@ -1,6 +1,6 @@
 import { propagateResBodyData} from '../utils/propagate.js';
 import {DB, reqTablePromise} from './indexDb.js';
-import { CsBatchForWaiting } from '../global/backgroundConfig.js';
+import { CsBatchForWaiting, getCurrentFilteringStepValue } from '../global/backgroundConfig.js';
 
 const retryThreshold = 15 * 1000;
 
@@ -213,7 +213,7 @@ export async function fetchBatch(CsImgData, tabId) {
             url: imgdata.url,
             status: imgdata.status,
             harmful: imgdata.harmful,
-            level: 3
+            level: getCurrentFilteringStepValue()
           }
         );
         formData.append('images', resizedImgBlob);
@@ -230,7 +230,7 @@ export async function fetchBatch(CsImgData, tabId) {
   try {
 
     const start = performance.now();
-    console.log("fetch!: ", CsImgData.length);
+    console.log(`<--fetch!-->\n total: ${CsImgData.length}\nlevel:${getCurrentFilteringStepValue() }`);
     const res = await fetch("https://image-interceptor-new1-683857194699.asia-northeast3.run.app", {
       method: "POST",
       body: formData

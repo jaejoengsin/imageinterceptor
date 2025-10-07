@@ -19,6 +19,8 @@ function getCurrentPageUrl() {
   });
 }
 
+
+
 async function loadNumOfHarmfulImg() {
   const pageNumDom = document.getElementById("page-count");
   const totalNumDom = document.getElementById("total-count");
@@ -38,6 +40,8 @@ document.addEventListener('DOMContentLoaded', async function () {
 
   const onOffSwitch = document.getElementById('onOffSwitch');
   const controlProcessButton = document.getElementById('ControlProcess');
+
+  const FilteringStepContainer = document.querySelector('.step-segmented-container');
 
   const counterSection = document.querySelector('.counter-section');
 
@@ -138,11 +142,20 @@ document.addEventListener('DOMContentLoaded', async function () {
   onOffSwitch.checked = (savedStatus === 1);
 
 
+  const currentFilteringStep = await chrome.storage.local.get(['filteringStep']).then(result => result.filteringStep);
+  FilteringStepContainer.querySelector(`input[name="segmented"][value="${currentFilteringStep}"]`).checked = true;
+
+
+
+
+
+
+
   loadNumOfHarmfulImg();
 
   //EVENT LISTNER//
   onOffSwitch.addEventListener('change', async function () {
-
+    if (!siteActiveFlag || !pageActiveFlag) return;
     const isChecked = onOffSwitch.checked;
     await chrome.storage.local.set({ 'interceptorStatus': isChecked ? 1 : 0 });
     chrome.runtime.sendMessage({ source: 'popup', type: 'active_interceptor', active: isChecked }, function (response) {
@@ -259,6 +272,11 @@ document.addEventListener('DOMContentLoaded', async function () {
    
   });
 
+  FilteringStepContainer.addEventListener('change', (event) => {
+   
+      const newSetting = event.target.value;
+    chrome.runtime.sendMessage({ source: 'popup', type: 'set_filtering_step', value: newSetting });
+  });
 
 });
 

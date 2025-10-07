@@ -1,12 +1,13 @@
 
 import * as indexDb from './modules/indexDb.js';
-import { CsBatchForWaiting } from './global/backgroundConfig.js';
+import { CsBatchForWaiting, setCurrentFilteringStepValue } from './global/backgroundConfig.js';
 import { fetchBatch } from './modules/requestImgAnalyze.js';
 import {setNumOfHarmfulImgInStorageSession, initNumOfHarmfulImgInStorageSession} from './utils/backgroundUtils.js'
 
 const currentTabs = new Map();
 const controlMenuImgStatusList = new Map();
 const retryThreshold = 15 * 1000;
+
 
 
 const contextControlMenu = {
@@ -317,6 +318,17 @@ chrome.runtime.onInstalled.addListener(async () => {
       chrome.storage.local.set({ 'totalNumOfHarmfulImg': 0 });}
   });
 
+
+  const storedCurrentFilteringStepValue = await chrome.storage.local.get(['filteringStep']).then(result => {
+    chrome.storage.local.set({ 'filteringStep': 1 });
+    let value = result.filteringStep;
+    if (value===undefined) {
+      chrome.storage.local.set({ 'filteringStep': 1 });
+      value = 1;
+    }
+    return value;
+  });
+  setCurrentFilteringStepValue(storedCurrentFilteringStepValue);
   return true;
 });
 
@@ -449,6 +461,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             } catch(e) {
               throw new Error(e);
             }
+            break;
+          case "set_filtering_step":
+            chrome.storage.local.set({ 'filteringStep': message.value });
+            console.log(message.value);
+            setCurrentFilteringStepValue(message.value);
+            break;
         }
       } catch (e) {
         console.error(e);
