@@ -2,7 +2,7 @@
 /node_modules
 
 # 빌드 결과물
-/dist
+
 
 # 환경 변수 및 기타 민감한 정보
 .env
