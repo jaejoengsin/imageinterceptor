@@ -1,0 +1,57 @@
+{
+    "name": "ImageInterceptor",
+    "description": "Chrome extension that replaces harmful images with safe ones on visited websites.",
+    "version": "1.0",
+    "manifest_version": 3,
+
+    "action": {
+      "default_popup": "popup.html",
+      "default_icon": "icons/main_icon.png"
+    },
+
+    "icons": {
+      "16": "icons/main_icon.png",
+      "32": "icons/main_icon.png"
+    },
+    "content_scripts": [
+      {
+        "matches": [
+          "<all_urls>"
+        ],
+        "run_at": "document_start",
+        "all_frames": true,
+        "match_about_blank": false,
+        "js": [
+          "content.js"
+        ],
+        "css": [
+          "masking.css"
+        ],
+        "type": "module"
+      }
+    ],
+
+
+    "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "host_permissions": [
+    "<all_urls>"
+  ],
+
+  "web_accessible_resources": [
+  {
+    "resources": [
+                  
+                  "icons/*.png"
+                  ],
+    "matches": ["<all_urls>"]
+  }
+],
+"permissions": ["activeTab","webRequest", "storage", "tabs",
+  "contextMenus","scripting"]
+
+}
+

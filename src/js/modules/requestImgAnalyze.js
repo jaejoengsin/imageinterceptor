@@ -231,7 +231,7 @@ export async function fetchBatch(CsImgData, tabId) {
 
     const start = performance.now();
     console.log(`<--fetch!-->\n total: ${CsImgData.length}\nlevel:${getCurrentFilteringStepValue() }`);
-    const res = await fetch("https://image-interceptor-new1-683857194699.asia-northeast3.run.app", {
+    const res = await fetch("https://image-interceptor-develop-683857194699.asia-northeast3.run.app", {
       method: "POST",
       body: formData
     });
