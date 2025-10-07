@@ -186,6 +186,83 @@ input:checked+.slider::before {
     transform: translateX(14px);
 }
 
+/*FILTERING STEP SEGMENT*/
+.step-segmented-container {
+    color-scheme: light dark;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    margin: 0 auto;
+}
+
+.segmented {
+    --padding: 0.25rem;
+    display: flex;
+    padding: var(--padding);
+    border-radius: 9999px;
+    anchor-name: --segmented-button-hover;
+
+    &::before,
+    &::after {
+        content: "";
+        position: absolute;
+        border-radius: inherit;
+        transition: inset 250ms cubic-bezier(0.4, 0, 0.2, 1);
+        inset:
+            calc(anchor(start) + var(--padding)) calc(anchor(end) + var(--padding)) calc(anchor(end) + var(--padding)) calc(anchor(start) + var(--padding));
+    }
+
+  
+    &::after {
+        background-color: light-dark(white, #333537);
+        position-anchor: --segmented-button-checked;
+        box-shadow:
+            0 0 0 1px #04d41e,
+            0 1px 3px 0 rgb(0 0 0 / 0.1),
+            0 1px 2px -1px rgb(0 0 0 / 0.1);
+    }
+}
+/* border: 1.5px solid #04d41e; */
+.segmented-button {
+
+    border: none;
+    width: 90px;
+    text-align: center;
+    border-radius: inherit;
+    padding: 0.65rem 1.3rem;
+    font-size: 0.7rem;
+    cursor: default;
+    z-index: 1;
+    anchor-name: var(--anchor-name-1, --a), var(--anchor-name-2, --b);
+
+
+    &:has(:checked) {
+        --anchor-name-2: --segmented-button-checked;
+    }
+
+    &:has(:focus-visible) {
+        outline: 2px solid #007acc;
+    }
+
+    input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border-width: 0;
+    }
+}
+
+
+
+
+/*------------------------------*/
+
+
 /* show/hide control 버튼 스타일 및 박스  */
 
 /* .control-button {
