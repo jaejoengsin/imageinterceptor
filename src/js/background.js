@@ -48,11 +48,7 @@ async function checkCsData(tabId, frameId, batch) {
     return;
   }
 
-  
-  
-  
-  const pageUrl = await getPageUrlFromTabId(tabId).then(pageUrl=>pageUrl).catch(err=>{console.error(err);});
-  
+  const pageUrl = await getPageUrlFromTabId(tabId).then(pageUrl=>pageUrl).catch(err=>{console.error(err);});  
   
   const CsBatchForDBAdd = [];
   
@@ -199,7 +195,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({ ok: true });
           break;
 
-        case "mainControlMenu":
+        case "imageClicked":
           if (message.imgSrc) {
             (async () => {
               chrome.contextMenus.removeAll(() => {
@@ -343,7 +339,9 @@ chrome.contextMenus.onClicked.addListener((item, tab) => {
   const controlId = item.menuItemId;
   const imgInfo = { tabId: tab.id, frameId: item.frameId, url: item.srcUrl };
 
+  console.log("컨텍스트 클릭");
   if (controlId === controlMenuImgStatusList.get(clickedImgSrc)) return;
+
 
   try {
     //추부 promise추가
