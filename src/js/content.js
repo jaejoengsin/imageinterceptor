@@ -260,9 +260,14 @@ function setEnventListers() {
         sendResponse({ ok: false, message: e });
       }
     }
+
+
+
+    
   });
-
-
+  
+  
+  
   //컨텍스트 메뉴 노출//
   document.addEventListener('contextmenu', function (event) {
 
@@ -311,7 +316,6 @@ function setEnventListers() {
   }, true);
 
 }
-
 
 
 

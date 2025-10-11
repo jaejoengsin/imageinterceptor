@@ -181,10 +181,10 @@ export async function fetchBatch(CsImgData, tabId) {
 
   //let CsImgDataForFetch = null;
   let formData = new FormData();
-  
+  let tabUrl;
   try {
     const tab = await chrome.tabs.get(tabId);
-    const refererUrl = tab.url;
+    tabUrl = tab.url;
 
     // CsImgDataForFetch = await Promise.all(
     //   CsImgData.map(async imgdata => {
@@ -199,7 +199,7 @@ export async function fetchBatch(CsImgData, tabId) {
     // );
     await Promise.all(
       CsImgData.map(async imgdata => {
-        const imgBlob = await fetchAndReturnBlobImg(imgdata.url, refererUrl);
+        const imgBlob = await fetchAndReturnBlobImg(imgdata.url, tabUrl);
         let resizedImgBlob;
 
         try{
@@ -231,10 +231,20 @@ export async function fetchBatch(CsImgData, tabId) {
 
     const start = performance.now();
     console.log(`<--fetch!-->\n total: ${CsImgData.length}\nlevel:${getCurrentFilteringStepValue() }`);
-    const res = await fetch("https://image-interceptor-develop-683857194699.asia-northeast3.run.app", {
-      method: "POST",
-      body: formData
-    });
+    let res;
+    if (tabUrl.includes("youtube.com") ){
+      res = await fetch("https://image-interceptor-youtube-683857194699.asia-northeast3.run.app", {
+        method: "POST",
+        body: formData
+      });
+    }
+    else {
+      res = await fetch("https://image-interceptor-develop-683857194699.asia-northeast3.run.app", {
+        method: "POST",
+        body: formData
+      });
+
+    }
     if (!res.ok) throw new Error("서버 응답 오류");// catch로 이동
     console.log(`response delaytime: ${(performance.now() - start) / 1000}`);
 
