@@ -38,11 +38,11 @@ export async function propagateResBodyData(responseData) {
                 else frames.get(imgData.frameId).push(imgData);
             }
 
-            CsBatchForWaiting.delete(url[1]);
+            CsBatchForWaiting.delete(url);
         }
     }
     sendWaitingCsDataToCs(readyToSend);//.then(res => { console.log("response status(WaitingCsData Sended): ", res); })contentscript와 runtimemessage 교신
-    //checkTimeAndRefetch();
+    checkTimeAndRefetch();
     
     for(const [pageUrl, count] of numOfHarmfulImgInPageMap) {
         //console.log("pageCountInfo\n"+pageUrl+'\n'+count);

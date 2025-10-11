@@ -122,14 +122,14 @@ async function fetchAndReturnBlobImg(url, refererUrl) {
 
 
 export async function checkTimeAndRefetch() {
+  const reFetchData = new Map();
+
   const tx = DB.transaction('imgURL', 'readwrite');
   const store = tx.objectStore('imgURL');
 
-  const reFetchData = new Map();
-
   for (const [url, imgData] of CsBatchForWaiting) {
+    
     let dbValue = await reqTablePromise(store.get(url[1])).then(result => {
-      
       return result;
     }).catch(error => {
       console.error("table에서 key 조회하고 value 가져오는 중에 Error 발생:", error);
