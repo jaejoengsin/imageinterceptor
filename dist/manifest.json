@@ -44,14 +44,13 @@
   "web_accessible_resources": [
   {
     "resources": [
-                  
                   "icons/*.png"
                   ],
     "matches": ["<all_urls>"]
   }
 ],
 "permissions": ["activeTab","webRequest", "storage", "tabs",
-  "contextMenus","scripting"]
+  "contextMenus"]
 
 }
 
