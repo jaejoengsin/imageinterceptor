@@ -9,12 +9,12 @@ let testcnt = 0;
 let clickedImg = null;
 
 //dom 로드 완료까지 오버레이 삽입, 유지
-if (window.top === window.self) {
-  const overlayDiv = document.createElement('div');
-  overlayDiv.id = 'extensionOverlay';
-  document.documentElement.appendChild(overlayDiv); // html 바로 아래에 추가
-  window.pageOverlay = overlayDiv;
-}
+// if (window.top === window.self) {
+//   const overlayDiv = document.createElement('div');
+//   overlayDiv.id = 'extensionOverlay';
+//   document.documentElement.appendChild(overlayDiv); // html 바로 아래에 추가
+//   window.pageOverlay = overlayDiv;
+// }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -169,20 +169,20 @@ async function pageInit() {
     }
 
   }
-  if (window.top === window.self) {
-    const overlay = document.getElementById('extensionOverlay');
-    if (overlay) {
-      console.log("overay remove starts");
+  // if (window.top === window.self) {
+  //   const overlay = document.getElementById('extensionOverlay');
+  //   if (overlay) {
+  //     console.log("overay remove starts");
 
-      overlay.classList.add('fade-out');
-      setTimeout(() => {
-        document.documentElement.style.pointerEvents = 'auto';
-        overlay.remove();// DOM에서 제거하여 완전하게 사라지게 함
-        // document.documentElement.style.visibility = 'visible';
-        console.log("overay removed");
-      }, 550); //500ms(0.5초)
-    }
-  }
+  //     overlay.classList.add('fade-out');
+  //     setTimeout(() => {
+  //       document.documentElement.style.pointerEvents = 'auto';
+  //       overlay.remove();// DOM에서 제거하여 완전하게 사라지게 함
+  //       // document.documentElement.style.visibility = 'visible';
+  //       console.log("overay removed");
+  //     }, 550); //500ms(0.5초)
+  //   }
+  // }
 
 }
 
@@ -242,6 +242,7 @@ function setEnventListers() {
             break;
 
           case 'control_img':
+            console.log("이미지 컨트롤");
             if (!getInterceptorActive()) sendResponse({ ok: false, message: "interceptor is not active" });
 
             const result = controlClickedImg(message.isShow);
@@ -265,6 +266,7 @@ function setEnventListers() {
   //컨텍스트 메뉴 노출//
   document.addEventListener('contextmenu', function (event) {
 
+
     if (!getInterceptorActive()) return;
 
     const target = event.target;
@@ -285,7 +287,6 @@ function setEnventListers() {
       // 현재 노드가 이미지인지 확인
       if (currentNode.tagName === 'IMG') {
         clickedImg = currentNode;
-        console.log(currentNode.src);
         chrome.runtime.sendMessage({
           source: "content",
           type: "imageClicked",
