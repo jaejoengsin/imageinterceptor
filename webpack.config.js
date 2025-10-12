@@ -38,6 +38,16 @@ module.exports = {
             },
         ],
     },
+
+    optimization: {
+        // splitChunks 설정 제거
+        // splitChunks: {
+        //    chunks: 'all',
+        //    name: false,
+        // },
+        runtimeChunk: false
+      },
+      
     externals: {
         chrome: 'chrome'
     },
