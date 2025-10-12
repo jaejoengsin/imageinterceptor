@@ -3,7 +3,7 @@
     "description": "Chrome extension that replaces harmful images with safe ones on visited websites.",
     "version": "1.0",
     "manifest_version": 3,
-
+    "key":"MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxCLsi0X3qmKf36EBiS2BkAKJvp0lEwvOaIayPg/jfx3UbqGdFMmlq535tSYE8ueeZ6Iq4C9KvZNWFt3B25VFhHTQ6TBOeRxOVG+U9xqOPDqWOWTOzNuiCBDG+00UDScbxejiSrl88AOTflPL3zqAyc5C5/4cIzoVQhHYO8tMiu2RTqGbT8ZLkBF/wUto9S/tHCfHftiGkxvEg11i85yICShRjnVIXoXAlnv9bPWwEyug1KGrsX3UpIAqKKg1YtcaqKItNM58KplSzxvKVegBM0APCRGzzcf2mjJ5kNYxJLuXbnxpQWsZsSFwlG6mTxNT+nWVA9ZDe0mXSYaZLe5qdwIDAQAB",
     "action": {
       "default_popup": "popup.html",
       "default_icon": "icons/main_icon.png"
@@ -50,7 +50,11 @@
   }
 ],
 "permissions": ["activeTab","webRequest", "storage", "tabs",
-  "contextMenus"]
+  "contextMenus"],
+  
+"content_security_policy": {
+  "extension_pages": "script-src 'self'; object-src 'self'"
+}
 
 }
 
