@@ -1,13 +1,10 @@
 
-import * as indexDb from './modules/indexDb.js';
-import { CsBatchForWaiting, setCurrentFilteringStepValue } from './global/backgroundConfig.js';
-import { fetchBatch } from './modules/requestImgAnalyze.js';
-import {setNumOfHarmfulImgInStorageSession, initNumOfHarmfulImgInStorageSession} from './utils/backgroundUtils.js'
-
 const currentTabs = new Map();
 const controlMenuImgStatusList = new Map();
 const retryThreshold = 15 * 1000;
 
+let initWorkerFlag = false;
+let initWorkerPromise = null;
 
 
 const contextControlMenu = {
@@ -25,9 +22,109 @@ let totalNumOfHarmfulImg;
 
 
 
+chrome.runtime.onMessage.addListener((message,sender,sendResponse)=> {
+  if (message.source === "content") {
+    try{
+      if (!initWorkerFlag) {
+  
+        initServiceWorker(message, sender, sendResponse).then(() => {
+          callBackForContentScript(message, sender, sendResponse);
+        });
+  
+      }
+      else  callBackForContentScript(message,sender,sendResponse);
+    }
+    catch(e){
+      console.error(e);
+    }
+    return true;
+  }
+
+});
+
+
+
+
+
+import * as indexDb from './modules/indexDb.js';
+import { CsBatchForWaiting, setCurrentFilteringStepValue } from './global/backgroundConfig.js';
+import { fetchBatch } from './modules/requestImgAnalyze.js';
+import {setNumOfHarmfulImgInStorageSession, initNumOfHarmfulImgInStorageSession} from './utils/backgroundUtils.js'
+
+
 //초기화 코드
+
+
+
 //비동기 준비 작업이 완료되어야 다음 코드를 실행할 수 있는 프로마이스 객체(resolved가 반환되어야 함). 함수 자체는 바로 실행
-let PromiseForInit = indexDb.initIndexDb();
+let PromiseForDBInit = indexDb.initIndexDb();
+
+
+async function initServiceWorker(message, sender, sendResponse) {
+
+  if(initWorkerPromise === null){
+    initWorkerPromise = new Promise(async (resolve, reject) => {
+      
+      try {
+        
+        storedInterceptorStatus = await chrome.storage.local.get(['interceptorStatus']);
+        let savedStatus = storedInterceptorStatus.interceptorStatus;
+        if (savedStatus === undefined) {
+          chrome.storage.local.set({ 'interceptorStatus': 1 });
+          savedStatus = 1;
+        }
+        isInterceptorActive = savedStatus === 1 ? true : false;
+        chrome.contextMenus.update('mainControlMenu', { enabled: isInterceptorActive });
+  
+  
+        const storedInterceptorSite = await chrome.storage.local.get(['interceptorSite']);
+        if (storedInterceptorSite === undefined || storedInterceptorSite.interceptorSite === undefined) {
+          chrome.storage.local.set({ 'interceptorSite': {} });
+          interceptorSite = new Map();
+        }
+        else {
+          interceptorSite = new Map(Object.entries(storedInterceptorSite.interceptorSite));
+        }
+  
+        chrome.storage.local.get(['totalNumOfHarmfulImg']).then(result => {
+          if (!result.totalNumOfHarmfulImg) {
+            chrome.storage.local.set({ 'totalNumOfHarmfulImg': 0 });
+          }
+        });
+  
+  
+        const storedCurrentFilteringStepValue = await chrome.storage.local.get(['filteringStep']).then(result => {
+          chrome.storage.local.set({ 'filteringStep': 1 });
+          let value = result.filteringStep;
+          if (value === undefined) {
+            chrome.storage.local.set({ 'filteringStep': 1 });
+            value = 1;
+          }
+          return value;
+        });
+        setCurrentFilteringStepValue(storedCurrentFilteringStepValue);
+
+        resolve();
+
+        initWorkerFlag = true; //비동기 초기화 작업 끝내고 flag true로 변경
+
+      }
+      catch(e){
+        reject(e);
+      }
+    });
+  }
+  try {
+    await initWorkerPromise;
+    initWorkerPromise = null;
+  }
+  catch (e) {
+    console.error(e);
+  }
+}
+
+
+
 
 function getPageUrlFromTabId(tabId) {
   return new Promise((resolve,reject) => {
@@ -42,7 +139,7 @@ function getPageUrlFromTabId(tabId) {
 async function checkCsData(tabId, frameId, batch) {
   
   try {
-    await PromiseForInit; //db init 프로미스 기다림. 
+    await PromiseForDBInit; //db init 프로미스 기다림. 
   } catch (e) {
     console.error(e);
     return;
@@ -159,12 +256,10 @@ async function checkCsData(tabId, frameId, batch) {
 }
 
 
-
 //////////////////////////////////event lister///////////////////////////////
 //콘텐츠 스크립트 리스너
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.source === "content") {
 
+function callBackForContentScript(message, sender, sendResponse) {
     try {
       switch (message?.type) {
 
@@ -187,10 +282,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
           }
 
-          getPageUrlFromTabId(sender?.tab?.id).then(pageUrl=>{
+          getPageUrlFromTabId(sender?.tab?.id).then(pageUrl => {
             console.log(pageUrl);
             initNumOfHarmfulImgInStorageSession(pageUrl);
-          }).catch(err=>{console.error(err);});
+          }).catch(err => { console.error(err); });
 
           sendResponse({ ok: true });
           break;
@@ -237,39 +332,44 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
 
         case "check_black_list":
+         
           let isInBlackList = false;
           try {
             if (interceptorSite.has(message.site)) {
+              
               const targetSite = interceptorSite.get(message.site);
               if (!targetSite["active"]) {
-                console.log("허용되지 않은 사이트");
+              
+                console.log("허용되지 않은 사이트2");
                 isInBlackList = true;
               }
               else {
                 if (targetSite["page"].includes(message.path)) {
+                
                   console.log("허용되지 않은 페이지");
                   isInBlackList = true;
                 }
               }
             }
+        
             sendResponse({
               ok: true,
               result: isInBlackList
             });
           }
           catch (e) {
-            sendResponse({
-              ok: false,
-            });
             throw new Error(e);
           }
 
       }
     } catch (e) {
-
+      console.error("error occured while responsing with script: ["+e+"]");
+      sendResponse({
+        ok: false,
+      });
     }
-  }
-});
+}
+
 
 
 
@@ -290,41 +390,7 @@ chrome.runtime.onInstalled.addListener(async () => {
       contexts: ['all']
     });
   }
-  storedInterceptorStatus = await chrome.storage.local.get(['interceptorStatus']);
-  let savedStatus = storedInterceptorStatus.interceptorStatus;
-  if (savedStatus === undefined) {
-    chrome.storage.local.set({ 'interceptorStatus': 1 });
-    savedStatus = 1;
-  }
-  isInterceptorActive = savedStatus === 1 ? true : false;
-  chrome.contextMenus.update('mainControlMenu', { enabled: isInterceptorActive });
 
-
-  const storedInterceptorSite = await chrome.storage.local.get(['interceptorSite']);
-  if (storedInterceptorSite === undefined || storedInterceptorSite.interceptorSite === undefined) {
-    chrome.storage.local.set({ 'interceptorSite': {} });
-    interceptorSite = new Map();
-  }
-  else {
-    interceptorSite = new Map(Object.entries(storedInterceptorSite.interceptorSite));
-  }  
-
-  chrome.storage.local.get(['totalNumOfHarmfulImg']).then(result => {
-    if (!result.totalNumOfHarmfulImg) {
-      chrome.storage.local.set({ 'totalNumOfHarmfulImg': 0 });}
-  });
-
-
-  const storedCurrentFilteringStepValue = await chrome.storage.local.get(['filteringStep']).then(result => {
-    chrome.storage.local.set({ 'filteringStep': 1 });
-    let value = result.filteringStep;
-    if (value===undefined) {
-      chrome.storage.local.set({ 'filteringStep': 1 });
-      value = 1;
-    }
-    return value;
-  });
-  setCurrentFilteringStepValue(storedCurrentFilteringStepValue);
   return true;
 });
 
