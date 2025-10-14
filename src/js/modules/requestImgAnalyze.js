@@ -128,26 +128,29 @@ export async function checkTimeAndRefetch() {
   const store = tx.objectStore('imgURL');
 
   for (const [url, imgData] of CsBatchForWaiting) {
-    
-    let dbValue = await reqTablePromise(store.get(url[1])).then(result => {
-      return result;
-    }).catch(error => {
-      console.error("table에서 key 조회하고 value 가져오는 중에 Error 발생:", error);
-    });
-    if (retryThreshold < (Date.now() - dbValue.saveTime)) {
-      if (!reFetchData.get(imgData.tabId)) {
-        reFetchData.set(imgData.tabId, [imgData]);
-      }
-      else {
-        reFetchData.get(imgData.tabId).push(imgData);
-      }
+    try {
+  
+      let dbValue = await reqTablePromise(store.get(url[1]));
 
-      dbValue.saveTime = Date.now();
-      await reqTablePromise(store.put(dbValue));
+      // dbValue가 유효한 객체인지 확인
+      if (dbValue && retryThreshold < (Date.now() - dbValue.saveTime)) {
+        if (!reFetchData.get(imgData.tabId)) {
+          reFetchData.set(imgData.tabId, [imgData]);
+        } else {
+          reFetchData.get(imgData.tabId).push(imgData);
+        }
+
+        dbValue.saveTime = Date.now();
+        await reqTablePromise(store.put(dbValue));
+      }
+    } catch (error) {
+      console.error( error);
+      // 오류가 발생하면 이 반복문은 계속 진행됩니다.
     }
   }
 
   for (const [tabId, imgDataArr] of reFetchData) {
+    console.log("resending data:" + reFetchData.size);
     fetchBatch(imgDataArr, tabId);
   }
   await tx.done?.();
@@ -239,7 +242,7 @@ export async function fetchBatch(CsImgData, tabId) {
       });
     }
     else {
-      res = await fetch("https://image-interceptor-develop-683857194699.asia-northeast3.run.app", {
+      res = await fetch("https://image-interceptor-youtube-683857194699.asia-northeast3.run.app", {
         method: "POST",
         body: formData
       });
