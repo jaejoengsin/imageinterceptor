@@ -55,7 +55,7 @@ export async function propagateResBodyData(responseData) {
 }
 
 
-async function sendWaitingCsDataToCs(readyData) {
+export async function sendWaitingCsDataToCs(readyData) {
     let sendData;
     let sendDataOne;
     const result = [];
