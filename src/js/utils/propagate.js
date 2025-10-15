@@ -4,7 +4,7 @@ import {checkTimeAndRefetch} from '../modules/requestImgAnalyze.js';
 import { CsBatchForWaiting } from '../global/backgroundConfig.js';
 import {setNumOfHarmfulImgInStorageSession, addTotalNumOfHarmfulImg} from '../utils/backgroundUtils.js'
 
-export async function propagateResBodyData(responseData) {
+export async function propagateResBodyData(responseData, refetch = true) {
     const readyToSend = new Map(); // tabid : [imgData, ....]
     const numOfHarmfulImgInPageMap = new Map();
     let totalNumOfHarmfulWaitingImg = 0;
@@ -42,7 +42,8 @@ export async function propagateResBodyData(responseData) {
         }
     }
     sendWaitingCsDataToCs(readyToSend);//.then(res => { console.log("response status(WaitingCsData Sended): ", res); })contentscript와 runtimemessage 교신
-    checkTimeAndRefetch();
+    
+    if (refetch) checkTimeAndRefetch();
     
     for(const [pageUrl, count] of numOfHarmfulImgInPageMap) {
         //console.log("pageCountInfo\n"+pageUrl+'\n'+count);

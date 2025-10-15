@@ -1,7 +1,7 @@
-import { propagateResBodyData} from '../utils/propagate.js';
+import { propagateResBodyData, sendWaitingCsDataToCs} from '../utils/propagate.js';
 import {DB, reqTablePromise} from './indexDb.js';
 import { CsBatchForWaiting, getCurrentFilteringStepValue } from '../global/backgroundConfig.js';
-
+import { discardUnnecessaryImgbyUrl, discardUnnecessaryImgBlob } from '../utils/discardUnnecessaryImgModule.js'
 const retryThreshold = 15 * 1000;
 
 // export async function fetchBatch(CsImgData, tabId) {
@@ -100,23 +100,8 @@ const retryThreshold = 15 * 1000;
 }
 
 async function fetchAndReturnBlobImg(url, refererUrl) {
-  return new Promise(async (resolve, reject) => {
-    try {
-
-      const res = await fetch(url, {
-        headers: {
-          'Referer': refererUrl
-        }
-      });
-      const resBlob = await res.blob();
-      return resolve(resBlob);
-
-    } catch (error) {
-
-      return reject(error);
-    };
-
-  });
+  const res = await fetch(url, { headers: { 'Referer': refererUrl } });
+  return res.blob();
 }
 
 
@@ -151,7 +136,7 @@ export async function checkTimeAndRefetch() {
 
   for (const [tabId, imgDataArr] of reFetchData) {
     console.log("resending data:" + reFetchData.size);
-    fetchBatch(imgDataArr, tabId);
+    refetchBatch(imgDataArr, tabId);
   }
   await tx.done?.();
 
@@ -180,29 +165,30 @@ async function resizeAndSendBlob(blob, width, height) {
   }
 
 
-export async function fetchBatch(CsImgData, tabId) {
+export async function fetchBatch(CsImgData, tabId, frameId) {
 
-  //let CsImgDataForFetch = null;
+  const unnecessaryCSImgData = [];
   let formData = new FormData();
   let tabUrl;
   try {
     const tab = await chrome.tabs.get(tabId);
     tabUrl = tab.url;
 
-    // CsImgDataForFetch = await Promise.all(
-    //   CsImgData.map(async imgdata => {
-    //     const content = await fetchAndReturnBase64Img(imgdata.url, refererUrl);
-    //     return {
-    //       url: imgdata.url,
-    //       content: content,
-    //       status: imgdata.status,
-    //       harmful: imgdata.harmful
-    //     };
-    //   })
-    // );
     await Promise.all(
       CsImgData.map(async imgdata => {
+        if (discardUnnecessaryImgbyUrl(imgdata.url)) {
+          unnecessaryCSImgData.push(imgdata);
+          CsBatchForWaiting.delete([imgdata.tabId, imgdata.url]);
+          return;
+        }
+
         const imgBlob = await fetchAndReturnBlobImg(imgdata.url, tabUrl);
+
+        if (await discardUnnecessaryImgBlob(imgBlob)){
+          unnecessaryCSImgData.push(imgdata);
+          return;
+        }
+
         let resizedImgBlob;
 
         try{
@@ -228,7 +214,25 @@ export async function fetchBatch(CsImgData, tabId) {
     console.error("body data 처리 및 준비 과정 중 에러 발생:", err);
   }
 
-  //const bodyData = JSON.stringify({ data: CsImgDataForFetch });
+  if (unnecessaryCSImgData.length > 0) {
+    console.log("tabid", tabId, "frameid", frameId);
+    // sendWaitingCsDataToCs(new Map([
+    //   [tabId, new Map([
+    //     [frameId, unnecessaryCSImgData]
+    //   ])]
+    // ]));
+
+    const unnecessaryCSImgDataForDB = new Map(unnecessaryCSImgData.map((el) => {
+      return [el.url, { url: el.url, response: true, status: true, harmful: false }];
+    }));
+    propagateResBodyData(unnecessaryCSImgDataForDB,false);
+  }
+
+  if (unnecessaryCSImgData.length === CsImgData.length){
+    console.log("no fetch data");
+    return;
+  }
+
 
   try {
 
@@ -242,7 +246,7 @@ export async function fetchBatch(CsImgData, tabId) {
       });
     }
     else {
-      res = await fetch("https://image-interceptor-youtube-683857194699.asia-northeast3.run.app", {
+      res = await fetch("https://image-interceptor-develop-683857194699.asia-northeast3.run.app", {
         method: "POST",
         body: formData
       });
@@ -269,6 +273,87 @@ export async function fetchBatch(CsImgData, tabId) {
     );
   }
 }
+
+
+export async function refetchBatch(CsImgData, tabId) {
+
+  let formData = new FormData();
+  let tabUrl;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    tabUrl = tab.url;
+
+    await Promise.all(
+      CsImgData.map(async imgdata => {
+      
+        const imgBlob = await fetchAndReturnBlobImg(imgdata.url, tabUrl);
+        let resizedImgBlob;
+
+        try {
+          resizedImgBlob = await resizeAndSendBlob(imgBlob, 224, 224);
+        }
+        catch (err) {
+          throw new Error("| resize과정에서 오류 발생 " + err);
+        }
+        const imgMetaJson = JSON.stringify(
+          {
+            url: imgdata.url,
+            status: imgdata.status,
+            harmful: imgdata.harmful,
+            level: getCurrentFilteringStepValue()
+          }
+        );
+        formData.append('images', resizedImgBlob);
+        formData.append('imgMeta', imgMetaJson);
+      })
+    );
+
+  } catch (err) {
+    console.error("body data 처리 및 준비 과정 중 에러 발생:", err);
+  }
+
+  try {
+    const start = performance.now();
+    console.log(`<--refetch!-->\n total: ${CsImgData.length}\nlevel:${getCurrentFilteringStepValue()}`);
+    let res;
+    if (tabUrl.includes("youtube.com")) {
+      res = await fetch("https://image-interceptor-youtube-683857194699.asia-northeast3.run.app", {
+        method: "POST",
+        body: formData
+      });
+    }
+    else {
+      res = await fetch("https://image-interceptor-develop-683857194699.asia-northeast3.run.app", {
+        method: "POST",
+        body: formData
+      });
+
+    }
+    if (!res.ok) throw new Error("서버 응답 오류");// catch로 이동
+    console.log(`response delaytime: ${(performance.now() - start) / 1000}`);
+
+    const responseBodyData = await res.json()?.then(result => { return result?.image });
+    if (responseBodyData.length > 0) {
+
+      const processedResBodyData = new Map(responseBodyData.map((el) => {
+        return [el.url, { url: el.url, response: true, status: el.status, harmful: el.harmful }];
+      }));
+
+      propagateResBodyData(processedResBodyData);
+
+    } else throw new Error("cause - fetch response: bodydata 없음");
+
+  } catch (err) {
+    console.error(
+      err instanceof SyntaxError
+        ? `JSON parsing failed: ${err.message}`
+        : `Request failed: ${err.message}`
+    );
+  }
+}
+
+
+
 
 // REQUEST DATA
 // [
