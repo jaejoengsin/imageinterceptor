@@ -22,6 +22,7 @@ let totalNumOfHarmfulImg;
 
 
 
+
 chrome.runtime.onMessage.addListener((message,sender,sendResponse)=> {
   if (message.source === "content") {
     try{
@@ -39,8 +40,117 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=> {
     }
     return true;
   }
+  
+});
+
+chrome.runtime.onInstalled.addListener(async () => {
+
+  chrome.contextMenus.create({
+    id: 'mainControlMenu',
+    title: 'ImageInterceptor - 유해 이미지 차단 프로그램',
+    contexts: ['all']
+  });
+
+  for (const [menuId, menuTitle] of Object.entries(contextControlMenu)) {
+    chrome.contextMenus.create({
+      id: menuId,
+      parentId: 'mainControlMenu',
+      title: menuTitle,
+      type: 'radio',
+      contexts: ['all']
+    });
+  }
+
+  return true;
+});
+
+
+chrome.contextMenus.onClicked.addListener((item, tab) => {
+
+  if (clickedImgSrc === null) {
+    chrome.contextMenus.update('ImgShow', { checked: true });
+    return;
+  }
+
+  const controlId = item.menuItemId;
+  const imgInfo = { tabId: tab.id, frameId: item.frameId, url: item.srcUrl };
+
+  console.log("컨텍스트 클릭");
+  if (controlId === controlMenuImgStatusList.get(clickedImgSrc)) return;
+
+
+  try {
+    //추부 promise추가
+    const response = chrome.tabs.sendMessage(imgInfo.tabId, {
+      source: "service_worker",
+      type: 'control_img',
+      isShow: controlId === 'ImgShow' ? true : false
+    }, { frameId: imgInfo.frameId });
+
+    if (!response.ok) {
+      console.log(response.message);
+      //throw new Error(response.message);
+    }
+
+    controlMenuImgStatusList.set(clickedImgSrc, controlId);
+    clickedImgSrc = null;
+
+  } catch (error) {
+    if (!error.message.includes('Could not establish connection')) console.error(error);
+    chrome.contextMenus.update('ImgShow', { checked: true });
+  }
+  return true;
 
 });
+
+
+//popup 리스너
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.source === "popup") {
+    (async () => {
+      try {
+        let responseStatus = true;
+        switch (message.type) {
+          case "active_interceptor":
+            responseStatus = await activeInterceptor(message.active);
+            if (!responseStatus.ok) console.error(responseStatus.ok);
+            isInterceptorActive = message.active;
+            chrome.contextMenus.update('mainControlMenu', { enabled: isInterceptorActive ? true : false });
+            sendResponse({ ok: responseStatus.ok });
+            break;
+
+          case "set_filter_status":
+            responseStatus = await setFilterStatus(message.FilterStatus);
+            if (!responseStatus.ok) console.error(responseStatus.message);
+            sendResponse({ ok: responseStatus.ok });
+            break;
+          case "popup_error":
+            throw new Error("from popup: " + message.error);
+          default:
+            throw new Error("can not read popup message type");
+          case "sync_black_list":
+            try {
+              interceptorSite.set(message.rootInstance[0], message.rootInstance[1]);
+              chrome.storage.local.set({ 'interceptorSite': Object.fromEntries(interceptorSite) });
+            } catch (e) {
+              throw new Error(e);
+            }
+            break;
+          case "set_filtering_step":
+            chrome.storage.local.set({ 'filteringStep': message.value });
+            console.log(message.value);
+            setCurrentFilteringStepValue(message.value);
+            break;
+        }
+      } catch (e) {
+        console.error(e);
+        sendResponse({ ok: false });
+      }
+    })();
+    return true;
+  }
+});
+
 
 
 
@@ -239,7 +349,7 @@ async function checkCsData(tabId, frameId, batch) {
       );
     });
 
-    fetchBatch(CsBatchForDBAdd, tabId);
+    fetchBatch(CsBatchForDBAdd, tabId, frameId);
     //db 추가했으니 fetch.
   }
 
@@ -372,70 +482,6 @@ function callBackForContentScript(message, sender, sendResponse) {
 
 
 
-
-chrome.runtime.onInstalled.addListener(async () => {
-
-  chrome.contextMenus.create({
-    id: 'mainControlMenu',
-    title: 'ImageInterceptor - 유해 이미지 차단 프로그램',
-    contexts: ['all']
-  });
-
-  for (const [menuId, menuTitle] of Object.entries(contextControlMenu)) {
-    chrome.contextMenus.create({
-      id: menuId,
-      parentId: 'mainControlMenu',
-      title: menuTitle,
-      type: 'radio',
-      contexts: ['all']
-    });
-  }
-
-  return true;
-});
-
-
-chrome.contextMenus.onClicked.addListener((item, tab) => {
-
-  if (clickedImgSrc === null) {
-    chrome.contextMenus.update('ImgShow', { checked: true });
-    return;
-  }
-
-  const controlId = item.menuItemId;
-  const imgInfo = { tabId: tab.id, frameId: item.frameId, url: item.srcUrl };
-
-  console.log("컨텍스트 클릭");
-  if (controlId === controlMenuImgStatusList.get(clickedImgSrc)) return;
-
-
-  try {
-    //추부 promise추가
-    const response = chrome.tabs.sendMessage(imgInfo.tabId, {
-      source: "service_worker",
-      type: 'control_img',
-      isShow: controlId === 'ImgShow' ? true : false
-    }, { frameId: imgInfo.frameId });
-
-    if (!response.ok) {
-      console.log(response.message);
-      //throw new Error(response.message);
-    }
-
-    controlMenuImgStatusList.set(clickedImgSrc, controlId);
-    clickedImgSrc = null;
-
-  } catch (error) {
-    if (!error.message.includes('Could not establish connection')) console.error(error);
-    chrome.contextMenus.update('ImgShow', { checked: true });
-  }
-  return true;
-
-});
-
-
-
-
 async function activeInterceptor(flag) {
   const result = { ok: true, message: [] };
 
@@ -493,51 +539,4 @@ async function setFilterStatus(flag) {
   }
   return result;
 }
-
-//팝업 리스너
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.source === "popup") {
-    (async () => {
-      try {
-        let responseStatus = true;
-        switch (message.type) {
-          case "active_interceptor":
-            responseStatus = await activeInterceptor(message.active);
-            if (!responseStatus.ok) console.error(responseStatus.ok);
-            isInterceptorActive = message.active;
-            chrome.contextMenus.update('mainControlMenu', { enabled: isInterceptorActive ? true : false });
-            sendResponse({ ok: responseStatus.ok });
-            break;
-
-          case "set_filter_status":
-            responseStatus = await setFilterStatus(message.FilterStatus);
-            if (!responseStatus.ok) console.error(responseStatus.message);
-            sendResponse({ ok: responseStatus.ok });
-            break;
-          case "popup_error":
-            throw new Error("from popup: " + message.error);
-          default:
-            throw new Error("can not read popup message type");
-          case "sync_black_list":
-            try{
-              interceptorSite.set(message.rootInstance[0], message.rootInstance[1]);
-              chrome.storage.local.set({ 'interceptorSite': Object.fromEntries(interceptorSite) });
-            } catch(e) {
-              throw new Error(e);
-            }
-            break;
-          case "set_filtering_step":
-            chrome.storage.local.set({ 'filteringStep': message.value });
-            console.log(message.value);
-            setCurrentFilteringStepValue(message.value);
-            break;
-        }
-      } catch (e) {
-        console.error(e);
-        sendResponse({ ok: false });
-      }
-    })();
-    return true;
-  }
-});
 
