@@ -103,6 +103,7 @@ function controlClickedImg(isShow) {
 ////
 
 
+
 //document.addEventListener('DOMContentLoaded', pageInit());
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', pageInit);
@@ -111,10 +112,8 @@ else {
   pageInit();
 }
 
-
 //초기화 함수
 async function pageInit() {
-
   let isInBlackList = await new Promise((resolve) => {
     try {
       chrome.runtime.sendMessage({ source: "content", type: "check_black_list", site: window.location.origin, page: window.location.pathname },
@@ -122,6 +121,7 @@ async function pageInit() {
           if (response.ok) {
             resolve(response.result);
           }
+          else throw new Error("블랙리스트를 조회할 수 없음");
         }
       );
     }
@@ -130,7 +130,6 @@ async function pageInit() {
       resolve(false);
     }
   });
-
   //초기화 시작//
   if (!isInBlackList) {
     console.log("블랙리스트에 없는 사이트, 설정 코드 실행");
@@ -160,7 +159,6 @@ async function pageInit() {
 
     setEnventListers();
 
-
     if (document.readyState != "loading") {
       if (getInterceptorActive()) {
         IMGObs.imgObserve();
@@ -169,6 +167,8 @@ async function pageInit() {
     }
 
   }
+  
+  
   // if (window.top === window.self) {
   //   const overlay = document.getElementById('extensionOverlay');
   //   if (overlay) {
@@ -185,9 +185,6 @@ async function pageInit() {
   // }
 
 }
-
-
-
 
 function setEnventListers() {
 
