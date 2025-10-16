@@ -44,9 +44,11 @@
   "web_accessible_resources": [
   {
     "resources": [
-                  "icons/*.png"
+                  "icons/*.png",
+                  "earlyImgMasking.css"
                   ],
     "matches": ["<all_urls>"]
+
   }
 ],
 "permissions": ["activeTab","webRequest", "storage", "tabs",
