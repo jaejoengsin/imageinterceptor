@@ -22,8 +22,7 @@ const WHITELIST = new Set([
 
 /* 스킴 & 확장자 검사 함수---------------------------------------------------- */
 function matchProtocolOrExt(u) {
-  return protoData.test(u) || protoBlob.test(u) ||
-         extPattern.test(u) || spritePat.test(u);
+  return protoData.test(u) || protoBlob.test(u);
 }
 
 /* ❷ 키워드 검사 함수 ---------------------------------------------------- */
@@ -51,13 +50,9 @@ function matchTracking(u) { return trackRegex.test(u.pathname); }
 function matchAdSafe (u) { return adSafeRegex.test(u.href);    }
 
 /* 규칙 검사를 위한 함수 모음 (함수 원형 배열) ------------------------------------------- */
+
 export const SAFE_RULES = [
-  matchProtocolOrExt,
-  matchKeyword,
-  matchTinySize,
-  matchWhitelist,
-  matchTracking,
-  matchAdSafe,
+  matchProtocolOrExt
 ];
 
 /* ❼ 단일 헬퍼 -------------------------------------------------------- */
