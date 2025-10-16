@@ -4,7 +4,7 @@ import dataBuffer from "../global/buffer";
 import { getInterceptorActive } from "../global/contentConfig";
 
 
-const MAX_N = 16, IDLE = 200;
+const MAX_N = 20, IDLE = 200;
 
 let idleT = null;
 

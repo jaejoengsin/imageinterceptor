@@ -2,7 +2,10 @@ import { propagateResBodyData, sendWaitingCsDataToCs} from '../utils/propagate.j
 import {DB, reqTablePromise} from './indexDb.js';
 import { CsBatchForWaiting, getCurrentFilteringStepValue } from '../global/backgroundConfig.js';
 import { discardUnnecessaryImgbyUrl, discardUnnecessaryImgBlob } from '../utils/discardUnnecessaryImgModule.js'
+
 const retryThreshold = 15 * 1000;
+
+const maxImgNum = 20;
 
 // export async function fetchBatch(CsImgData, tabId) {
 
@@ -136,7 +139,15 @@ export async function checkTimeAndRefetch() {
 
   for (const [tabId, imgDataArr] of reFetchData) {
     console.log("resending data:" + reFetchData.size);
-    refetchBatch(imgDataArr, tabId);
+    if (reFetchData.length > maxImgNum) {
+      for (let startIdx = 0; startIdx < reFetchData.length; startIdx += maxImgNum) {
+        const batch = reFetchData.slice(startIdx, startIdx + maxImgNum);
+        refetchBatch(batch, tabId);
+      }
+    } else {
+     
+      refetchBatch(reFetchData, tabId);
+    }
   }
   await tx.done?.();
 
@@ -168,6 +179,7 @@ async function resizeAndSendBlob(blob, width, height) {
 export async function fetchBatch(CsImgData, tabId, frameId) {
 
   const unnecessaryCSImgData = [];
+  let fetchNum  = 0;
   let formData = new FormData();
   let tabUrl;
   try {
@@ -207,6 +219,7 @@ export async function fetchBatch(CsImgData, tabId, frameId) {
         );
         formData.append('images', resizedImgBlob);
         formData.append('imgMeta', imgMetaJson);
+        fetchNum++;
       })
     );
 
@@ -237,7 +250,7 @@ export async function fetchBatch(CsImgData, tabId, frameId) {
   try {
 
     const start = performance.now();
-    console.log(`<--fetch!-->\n total: ${CsImgData.length}\nlevel:${getCurrentFilteringStepValue() }`);
+    console.log(`<--fetch!-->\n total: ${fetchNum}\nlevel:${getCurrentFilteringStepValue() }`);
     let res;
     if (tabUrl.includes("youtube.com") ){
       res = await fetch("https://image-interceptor-youtube-683857194699.asia-northeast3.run.app", {
