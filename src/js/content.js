@@ -8,6 +8,15 @@ import dataBuffer from './global/buffer.js';
 let testcnt = 0;
 let clickedImg = null;
 
+const link = document.createElement('link');
+link.rel = 'stylesheet';
+link.id = 'earlyImgMasking';
+// 확장 프로그램 내부의 CSS 파일 경로
+link.href = chrome.runtime.getURL('earlyImgMasking.css');
+link.onload = () => { (console.log("succeed to load earlyImgMasking.css")); };
+(document.head || document.documentElement).prepend(link);
+
+
 //dom 로드 완료까지 오버레이 삽입, 유지
 // if (window.top === window.self) {
 //   const overlayDiv = document.createElement('div');
@@ -106,6 +115,7 @@ function controlClickedImg(isShow) {
 
 //document.addEventListener('DOMContentLoaded', pageInit());
 if (document.readyState === 'loading') {
+
   document.addEventListener('DOMContentLoaded', pageInit);
 }
 else {
@@ -137,6 +147,7 @@ async function pageInit() {
     const registerResult = await chrome.runtime.sendMessage({ source: "content",type: "register_frame" });
     if (!registerResult.ok) {
       console.error("can not register frame to service worker");
+      document.getElementById(' earlyImgMasking').remove();
       return;
     }
 
@@ -167,6 +178,10 @@ async function pageInit() {
     }
 
   }
+  else {
+    console.log("블랙리스트에 있는 사이트");
+  }
+  document.getElementById('earlyImgMasking').remove();
   
   
   // if (window.top === window.self) {

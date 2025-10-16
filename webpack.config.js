@@ -66,6 +66,10 @@ module.exports = {
                     to: 'masking.css'          // dist 폴더의 최상위 경로로 복사
                 },
                 {
+                    from: 'src/css/earlyImgMasking.css', 
+                    to: 'earlyImgMasking.css' 
+                },
+                {
                     from: 'src/popup.html', // static 폴더 내 manifest.json의 원본 경로
                     to: 'popup.html'          // dist 폴더의 최상위 경로로 복사
                 },

@@ -1,0 +1,8 @@
+img {
+    visibility: hidden !important;
+    /*display: none !important; /* 요소를 숨기고 공간도 차지하지 않게 합니다. */
+    opacity: 0 !important;
+    /* 요소를 투명하게 만들지만 공간은 차지 */
+    /*background-color: blue !important; /* 배경색으로 가리는 방법 */
+    /*pointer-events: none; */ 
+}
