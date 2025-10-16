@@ -35,8 +35,7 @@ function checkConditionAndSend(img, type) {
     if (filterModule.filter_based_safeUrlPattern(absUrl)) {
       img.dataset.masking = "None";
       NoNSafeImgCount++;
-      img.dataset.imgId = "except";
-      console.log("비유해 이미지:", absUrl.toString(), " 총합:", NoNSafeImgCount);
+      console.log("비유해 이미지:", absUrl.toString(), +"\n", img.dataset.imgId , "  총합:", NoNSafeImgCount);
       return;
     }
   } catch (e) {
