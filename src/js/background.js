@@ -28,7 +28,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=> {
     try{
       if (!initWorkerFlag) {
   
-        initServiceWorker(message, sender, sendResponse).then(() => {
+        initServiceWorker().then(() => {
           callBackForContentScript(message, sender, sendResponse);
         });
   
@@ -109,7 +109,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.source === "popup") {
     (async () => {
       try {
+
+        if (!initWorkerFlag) await initServiceWorker();
+        
         let responseStatus = true;
+
         switch (message.type) {
           case "active_interceptor":
             responseStatus = await activeInterceptor(message.active);
@@ -130,7 +134,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             throw new Error("can not read popup message type");
           case "sync_black_list":
             try {
+              console.log(interceptorSite);
               interceptorSite.set(message.rootInstance[0], message.rootInstance[1]);
+              
               chrome.storage.local.set({ 'interceptorSite': Object.fromEntries(interceptorSite) });
             } catch (e) {
               throw new Error(e);
@@ -170,7 +176,7 @@ import {setNumOfHarmfulImgInStorageSession, initNumOfHarmfulImgInStorageSession}
 let PromiseForDBInit = indexDb.initIndexDb();
 
 
-async function initServiceWorker(message, sender, sendResponse) {
+async function initServiceWorker() {
 
   if(initWorkerPromise === null){
     initWorkerPromise = new Promise(async (resolve, reject) => {
