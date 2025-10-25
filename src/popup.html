@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="popup.css">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!--pont-->
+    <link href="https://fonts.googleapis.com/css2?family=Edu+NSW+ACT+Cursive:wght@400..700&family=Michroma&display=swap"
+        rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet"
+        type="text/css" />
+    <script src="popup.js"></script>
+    <title>Image Interceptor</title>
+</head>
+
+<body>
+    <div class="popup-container  program-active-border">
+        <header class="header-section">
+            <div class="header-left">
+                <img src="icons/main_icon.png" alt="Image Interceptor 로고" class="logo-image">
+                <div class="header-text-container">
+                    <h1 class="header-title michroma-regular">Image Interceptor</h1>
+                    <p class="header-subtitle"></p>
+                </div>
+            </div>
+            <label class="switch" role="switch" aria-checked="true" aria-label="수동 모드 활성화">
+                <input id="onOffSwitch" type="checkbox">
+                <span class="slider round"></span>
+            </label>
+        </header>
+
+        <main class="main-content">
+            <section class="card-section">
+                <div class="card-header">
+                    <h2 class="card-title michroma-regular">Control Masked Image Group</h2>
+                    <p class="card-description">이미지 필터의 강도를 조정합니다</p>
+                </div>
+                <div class="apply-button-container">
+                    <button class="apply-button  michroma-regular" id="ControlProcess">
+                        <span class="michroma-regular"> Show
+                        </span>
+                    </button>
+
+                </div>
+            </section>
+
+            <section class="card-section">
+                <div class="card-header">
+                    <h2 class="card-title michroma-regular">Change Threshold</h2>
+                    <p class="card-description">이미지 필터의 강도를 조정합니다</p>
+                </div>
+                <div class="step-segmented-container">
+                    <div class="segmented michroma-regular">
+                        <label class="segmented-button">
+                            <input type="radio" name="segmented" value="1">
+                            1
+                        </label>
+                        <label class="segmented-button">
+                            <input type="radio" name="segmented" value="2">
+                            2
+                        </label>
+                        
+                        <label class="segmented-button michroma-regular">
+                            <input type="radio" name="segmented" value="3">
+                            3
+                        </label></div>
+                </div>
+            </section>
+            <section class="card-section">
+                <div class="card-header">
+                    <h2 class="card-title michroma-regular">deactivate Program</h2>
+                </div>
+                <div class="apply-button-container" id="active-area">
+                    <div class="apply-item">
+                        <button class="apply-button" id="site-active-button" style="border-color: gray;">
+                            <span class="michroma-regular">이 사이트에서 프로그램 비활성화
+                            </span>
+                        </button>
+                        <div class="apply-state" id="site-apply-state">
+                            <i class="apply-led" style="background:#ff4500;color:#ff4500;"></i>
+                            <p class="michroma-regular" style="font-size: 9px;">on</p>
+                        </div>
+                    </div>
+                    <div class="apply-item">
+                        <button class="apply-button" id="page-active-button" style="border-color: gray;">
+                            <span class="michroma-regular">이 페이지에서 프로그램 비활성화
+                            </span>
+                        </button>
+                        <div class="apply-state" id="page-apply-state">
+                            <i class="apply-led" style="background:#ff4500;color:#ff4500;"></i>
+                            <p class="michroma-regular" style="font-size: 9px;">on</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <div class="refresh-button-container">
+            </div>
+        </main>
+
+        <section class="counter-section">
+            <p class="counter-label">차단된 유해 콘텐츠 수</p>
+            <div class="counter-display">
+                <div class="counter-box">
+                    <p class="counter-title">이 페이지에서</p>
+                    <p id="page-count" class="counter-number page-count michroma-regular"></p>
+                </div>
+                <div class="counter-divider"></div>
+                <div class="counter-box">
+                    <p class="counter-title">총계</p>
+                    <p id="total-count" class="counter-number total-count michroma-regular"></p>
+                </div>
+            </div>
+        </section>
+
+        <footer class="footer-section">
+            <div class="footer-links">
+                <a href="#" class="footer-link">email: zhzhqkq00@gmail.com</a>
+                <span class="link-separator">|</span>
+                <a id="privacy-policy" href="https://dark-sale-73e.notion.site/privacy-policy-25e73dea62518044aa98cdd72f78ffcf?source=copy_link" class="footer-link">privacy-policy</a>
+                <!-- <span class="link-separator">|</span>
+                <a href="#" class="footer-link">Setting</a> -->
+            </div>
+            <!-- <img src="https://via.placeholder.com/24" alt="설정 아이콘" class="settings-icon"> -->
+        </footer>
+    </div>
+</body>
+
+</html>
