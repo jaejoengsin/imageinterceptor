@@ -1,5 +1,5 @@
 import '../css/popup.css';
-import {getNumOfHarmfulImgInthispage} from './utils/backgroundUtils.js';
+import { getNumOfHarmfulImgInthispage } from './utils/backgroundUtils.js';
 
 function getCurrentPageUrl() {
   return new Promise((resolve, reject) => {
@@ -24,8 +24,8 @@ function getCurrentPageUrl() {
 async function loadNumOfHarmfulImg() {
   const pageNumDom = document.getElementById("page-count");
   const totalNumDom = document.getElementById("total-count");
-  
-  const currentPageUrl = await getCurrentPageUrl().then(result =>result.href);
+
+  const currentPageUrl = await getCurrentPageUrl().then(result => result.href);
   const pageNum = await getNumOfHarmfulImgInthispage(currentPageUrl);
   const totalNum = await chrome.storage.local.get(['totalNumOfHarmfulImg']).then(result => { return result.totalNumOfHarmfulImg; });
   console.log(totalNum);
@@ -35,6 +35,21 @@ async function loadNumOfHarmfulImg() {
 
 
 
+//state: 프로그램 작동중, 프로그램 꺼짐, 프로그램 차단됨
+function changeStateInfo(String) {
+  const programStateInfo = document.querySelector('.header-subtitle'); //state:
+  if (String === "active") {
+    programStateInfo.innerHTML = `<span style="color: #0CBA00">프로그램 작동중</span>`;
+  }
+  else if (String === "inactive") {
+    programStateInfo.innerHTML = `<span style="color: gray">프로그램 꺼짐</span>`;
+
+  }
+  else if (String === "blocked") {
+    programStateInfo.innerHTML = `<span style="color: red">프로그램 차단됨</span>`;
+  }
+}
+
 
 document.addEventListener('DOMContentLoaded', async function () {
 
@@ -43,7 +58,6 @@ document.addEventListener('DOMContentLoaded', async function () {
 
   const FilteringStepContainer = document.querySelector('.step-segmented-container');
 
-  const counterSection = document.querySelector('.counter-section');
 
   const siteActiveButton = document.getElementById('site-active-button');
   const pageActiveButton = document.getElementById('page-active-button');
@@ -51,32 +65,74 @@ document.addEventListener('DOMContentLoaded', async function () {
   const pageApplyState = document.getElementById('page-apply-state');
   const siteApplyState = document.getElementById('site-apply-state');
 
-  const applyTxt = document.querySelector('.apply-text');
 
   const activeArea = document.querySelector('.program-active-border');
+
+  const policyLink = document.getElementById('privacy-policy');
+
+  const refreshButtonContainer = document.querySelector('.refresh-button-container');
+  const refreshButton = document.createElement('button');
+  refreshButton.classList.add('refresh-button');
+  refreshButton.innerText = "새로고침하여 변경 내용 적용하기";
+
   const interceptorSite = await chrome.storage.local.get(['interceptorSite']).then(result => { return result.interceptorSite; });
-  console.log(interceptorSite);
+
   let siteActiveFlag = true;
   let pageActiveFlag = true;
   let currentPageUrl = null;
   let currentSite = null;
 
+  let storedFilterStatus = null;
+  let isFilteringOn = null;
+
+  let storedInterceptorStatus = null;
+  let interceptorStatus = null;
+
+  let currentFilteringStep = null;
 
   try {
+    storedFilterStatus = await chrome.storage.local.get(['filterStatus']);
+    isFilteringOn = storedFilterStatus.filterStatus;
+
+    if (isFilteringOn === undefined) {
+      chrome.storage.local.set({ 'filterStatus': true });
+      isFilteringOn = true;
+    }
+    controlProcessButton.querySelector('span').textContent = isFilteringOn ? 'Show' : 'Hide';
+
+
+    storedInterceptorStatus = await chrome.storage.local.get(['interceptorStatus']);
+    interceptorStatus = storedInterceptorStatus.interceptorStatus;
+
+    if (interceptorStatus === undefined) {
+      chrome.storage.local.set({ 'interceptorStatus': 1 });
+      interceptorStatus = 1;
+    }
+    onOffSwitch.checked = (interceptorStatus === 1);
+
+
+    currentFilteringStep = await chrome.storage.local.get(['filteringStep']).then(result => result.filteringStep);
+    FilteringStepContainer.querySelector(`input[name="segmented"][value="${currentFilteringStep}"]`).checked = true;
+
     currentPageUrl = await getCurrentPageUrl();
+    currentSite = currentPageUrl.origin;
   } catch (e) {
+    console.error("error occured while loading storage value"+e);
     chrome.runtime.sendMessage({ source: 'popup', type: 'popup_error', error: e.message });
     return;
   }
 
-  currentSite = currentPageUrl.origin;
+  /////////////enable/disable interceptor status according on/off
 
+
+
+  /////////////
   // if (currentPageUrl.protocol === 'http:' || currentPageUrl.protocol === 'https:') {
   if (true) {
     try {
-      
+
       if (currentSite in interceptorSite) {
-        
+
         siteActiveFlag = interceptorSite[currentSite]["active"];
 
         if (!siteActiveFlag) {
@@ -84,71 +140,57 @@ document.addEventListener('DOMContentLoaded', async function () {
           siteApplyState.querySelector('.apply-led').classList.add("on");
           siteActiveButton.querySelector('span').textContent = "사이트에서 프로그램 비활성화";
 
+
+
           pageActiveButton.classList.add("disabled");
           pageActiveButton.querySelector('span').textContent = "-";
           pageActiveButton.disabled = true;
           //pageActiveButton.style.borderColor = "red";
         }
-        console.log(interceptorSite[currentSite]["page"]);
+      
         if (interceptorSite[currentSite]["page"].includes(currentPageUrl.pathname)) {
 
-          console.log(interceptorSite[currentSite]["page"]);
           pageActiveFlag = false;
-          
           if (siteActiveFlag) {
             pageApplyState.querySelector('.apply-led').classList.add("on");
-          
+
           }
-            
+
         }
 
-        if (!pageActiveFlag || !siteActiveFlag){
+        if (!pageActiveFlag || !siteActiveFlag) {
+          changeStateInfo("blocked");
           activeArea.style.boxShadow = "0 0 2px 1px red";
           activeArea.style.borderColor = "red";
-          controlProcessButton.disabled = true;
+
+          onOffSwitch.parentElement.classList.add('disabled');
+          controlProcessButton.classList.add('disabled');
+          FilteringStepContainer.querySelector('.segmented').classList.add('disabled');
+        }
+
+        else {
+          if(interceptorStatus != 1){
+            changeStateInfo("inactive");
+            activeArea.style.boxShadow = "0 0 2px 1px #ccc";
+            activeArea.style.borderColor = "#ccc";
+            controlProcessButton.classList.add('disabled');
+            FilteringStepContainer.querySelector('.segmented').classList.add('disabled');
+          }
+          else {
+            changeStateInfo("active");
+          }
         }
       }
-    
 
     } catch (e) {
       chrome.runtime.sendMessage({ source: 'popup', type: 'popup_error', error: e.message });
       return;
     }
 
-    
+
   } else {
     return;
-  } 
-
-  const storedFilterStatus = await chrome.storage.local.get(['filterStatus']);
-  let isFilteringOn = storedFilterStatus.filterStatus;
-
-  if (isFilteringOn === undefined) {
-    chrome.storage.local.set({ 'filterStatus': true });
-    isFilteringOn = true;
   }
-  controlProcessButton.querySelector('span').textContent = isFilteringOn ? 'Show' : 'Hide';
-
-
-  const storedInterceptorStatus = await chrome.storage.local.get(['interceptorStatus']);
-  let savedStatus = storedInterceptorStatus.interceptorStatus;
-
-  if (savedStatus === undefined) {
-    chrome.storage.local.set({ 'interceptorStatus': 1 });
-    savedStatus = 1;
-  }
-
-
-  onOffSwitch.checked = (savedStatus === 1);
-
-
-  const currentFilteringStep = await chrome.storage.local.get(['filteringStep']).then(result => result.filteringStep);
-  FilteringStepContainer.querySelector(`input[name="segmented"][value="${currentFilteringStep}"]`).checked = true;
-
-
-
-
-
 
 
   loadNumOfHarmfulImg();
@@ -157,6 +199,21 @@ document.addEventListener('DOMContentLoaded', async function () {
   onOffSwitch.addEventListener('change', async function () {
     if (!siteActiveFlag || !pageActiveFlag) return;
     const isChecked = onOffSwitch.checked;
+    if (isChecked) {
+      changeStateInfo("active");
+      activeArea.style.boxShadow = "0 0 2px 1px #04d41e";
+      activeArea.style.borderColor = "#04d41e";
+      controlProcessButton.classList.remove('disabled');
+      FilteringStepContainer.querySelector('.segmented').classList.remove('disabled');
+    }
+    else {
+      changeStateInfo("inactive");
+      activeArea.style.boxShadow = "0 0 2px 1px #ccc";
+      activeArea.style.borderColor = "#ccc";
+      controlProcessButton.classList.add('disabled');
+      FilteringStepContainer.querySelector('.segmented').classList.add('disabled');
+    }
+  
     await chrome.storage.local.set({ 'interceptorStatus': isChecked ? 1 : 0 });
     chrome.runtime.sendMessage({ source: 'popup', type: 'active_interceptor', active: isChecked }, function (response) {
 
@@ -182,11 +239,15 @@ document.addEventListener('DOMContentLoaded', async function () {
 
 
   siteActiveButton.addEventListener('click', async function () {
-    
-    siteActiveFlag = !siteActiveFlag;
-    applyTxt.textContent = "변경 내용을 저장하시려면 새로고침을 해주세요";
 
-    if (!(currentSite in interceptorSite)) interceptorSite[currentSite] = { "active": siteActiveFlag, "page":[] }; 
+    siteActiveFlag = !siteActiveFlag;
+
+    if (!refreshButtonContainer.querySelector('.refresh-button')) {
+      refreshButtonContainer.appendChild(refreshButton);
+    }
+
+
+    if (!(currentSite in interceptorSite)) interceptorSite[currentSite] = { "active": siteActiveFlag, "page": [] };
     else {
       interceptorSite[currentSite]["active"] = siteActiveFlag;
     }
@@ -194,19 +255,29 @@ document.addEventListener('DOMContentLoaded', async function () {
     if (siteActiveFlag) {
 
       siteApplyState.querySelector('.apply-led').classList.remove("on");
-      
+
       if (!pageActiveFlag) {
         pageApplyState.querySelector('.apply-led').classList.add("on");
       }
       else {
-        activeArea.style.boxShadow = "0 0 2px 1px #04d41e";
-        activeArea.style.borderColor = "#04d41e";
-        
-        controlProcessButton.disabled = false;
+        if(onOffSwitch.checked){
+          changeStateInfo("active");
+          activeArea.style.boxShadow = "0 0 2px 1px #04d41e";
+          activeArea.style.borderColor = "#04d41e";
+          onOffSwitch.parentElement.classList.remove('disabled');
+          controlProcessButton.classList.remove('disabled');
+          FilteringStepContainer.querySelector('.segmented').classList.remove('disabled');
+        }
+        else {
+          changeStateInfo("inactive");
+          activeArea.style.boxShadow = "0 0 2px 1px #ccc";
+          activeArea.style.borderColor = "#ccc";
+          onOffSwitch.parentElement.classList.remove('disabled');
+        }
       }
 
       pageActiveButton.classList.remove("disabled");
-      pageActiveButton.querySelector('span').textContent = "사이트에서 프로그램 비활성화";
+      pageActiveButton.querySelector('span').textContent = "이 페이지에서 프로그램 비활성화";
       pageActiveButton.disabled = false;
 
     }
@@ -218,14 +289,17 @@ document.addEventListener('DOMContentLoaded', async function () {
         pageApplyState.querySelector('.apply-led').classList.remove("on");
       }
       else {
+        changeStateInfo("blocked");
         activeArea.style.boxShadow = "0 0 2px 1px red";
         activeArea.style.borderColor = "red";
+        onOffSwitch.parentElement.classList.add('disabled');
+        controlProcessButton.classList.add('disabled');
+        FilteringStepContainer.querySelector('.segmented').classList.add('disabled');
       }
 
       pageActiveButton.classList.add("disabled");
       pageActiveButton.querySelector('span').textContent = "-";
       pageActiveButton.disabled = true;
-      controlProcessButton.disabled = true;
     }
     chrome.runtime.sendMessage({ source: 'popup', type: 'sync_black_list', rootInstance: [currentSite, interceptorSite[currentSite]] });
     //await chrome.storage.local.set({ 'interceptorSite': interceptorSite });
@@ -235,18 +309,33 @@ document.addEventListener('DOMContentLoaded', async function () {
 
   pageActiveButton.addEventListener('click', async function () {
     pageActiveFlag = !pageActiveFlag;
-    applyTxt.textContent = "변경 내용을 저장하시려면 새로고침을 해주세요";
 
-    if(!(currentSite in interceptorSite)) interceptorSite[currentSite] = { "active": true, "page": [] };
+    if(!refreshButtonContainer.querySelector('.refresh-button')){
+      refreshButtonContainer.appendChild(refreshButton);
+    }
+
+    if (!(currentSite in interceptorSite)) interceptorSite[currentSite] = { "active": true, "page": [] };
     if (pageActiveFlag) {
-    
-      if(siteActiveFlag) {    
+
+      if (siteActiveFlag) {
         pageApplyState.querySelector('.apply-led').classList.remove("on");
-        activeArea.style.boxShadow = "0 0 2px 1px #04d41e";
-        activeArea.style.borderColor = "#04d41e";
-        controlProcessButton.disabled = false;
-        
-        
+
+        if(onOffSwitch.checked){
+          changeStateInfo("active");
+          activeArea.style.boxShadow = "0 0 2px 1px #04d41e";
+          activeArea.style.borderColor = "#04d41e";
+          onOffSwitch.parentElement.classList.remove('disabled');
+          controlProcessButton.classList.remove('disabled');
+          FilteringStepContainer.querySelector('.segmented').classList.remove('disabled');
+        }
+        else {
+          changeStateInfo("inactive");
+          activeArea.style.boxShadow = "0 0 2px 1px #ccc";
+          activeArea.style.borderColor = "#ccc";
+          onOffSwitch.parentElement.classList.remove('disabled');
+        }
+
+
       }
       const delIndex = interceptorSite[currentSite]["page"].indexOf(currentPageUrl.pathname);
       if (delIndex !== -1) {
@@ -255,27 +344,38 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
     else {
 
-      if(siteActiveFlag){
+      if (siteActiveFlag) {
         pageApplyState.querySelector('.apply-led').classList.add("on");
+        changeStateInfo("blocked");
         activeArea.style.boxShadow = "0 0 2px 1px red";
         activeArea.style.border = "red";
-
-        controlProcessButton.disabled = true;
+        onOffSwitch.parentElement.classList.add('disabled');
+        controlProcessButton.classList.add('disabled');
+        FilteringStepContainer.querySelector('.segmented').classList.add('disabled');
 
       }
 
-      if(currentPageUrl.pathname != "/") interceptorSite[currentSite]["page"].push(currentPageUrl.pathname);
+      if (currentPageUrl.pathname != "/") interceptorSite[currentSite]["page"].push(currentPageUrl.pathname);
       console.log(interceptorSite[currentSite]["page"]);
     }
-    chrome.runtime.sendMessage({ source: 'popup', type: 'sync_black_list', rootInstance: [currentSite, interceptorSite[currentSite]]});
+    chrome.runtime.sendMessage({ source: 'popup', type: 'sync_black_list', rootInstance: [currentSite, interceptorSite[currentSite]] });
     //await chrome.storage.local.set({ 'interceptorSite': interceptorSite });
-   
+
   });
 
   FilteringStepContainer.addEventListener('change', (event) => {
-   
-      const newSetting = event.target.value;
+
+    const newSetting = event.target.value;
     chrome.runtime.sendMessage({ source: 'popup', type: 'set_filtering_step', value: newSetting });
+  });
+
+  policyLink.addEventListener('click', function (e) {
+    e.preventDefault(); 
+    chrome.tabs.create({ url: this.href });
+  });
+
+  refreshButton.addEventListener('click', function () {
+    chrome.tabs.reload();
   });
 
 });
