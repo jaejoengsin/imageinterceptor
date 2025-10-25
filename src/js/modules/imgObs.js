@@ -127,8 +127,8 @@ class imageObservers {
       mutations.forEach(mutation => {
         if (mutation.type === 'childList') {
           mutation.addedNodes.forEach(node => {
-            if (node.nodeType !== 1) return;  // element만 처리
-            if (node.tagName === 'IMG') {
+            if (node.nodeType !== 1 || node.classList.contains('harmful-img-wrapper')) return;  // element만 처리
+            else if (node.tagName === 'IMG') {
 
               if (!node.dataset.imgId) {
                 createRandomImgID(node);

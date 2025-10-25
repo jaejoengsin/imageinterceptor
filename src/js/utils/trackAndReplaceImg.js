@@ -45,7 +45,7 @@ export function trackAndReplaceImg(responseFromSW) {
 
                         // object.classList.remove('imgMasking');
 
-                        object.dataset.masking = "None";
+                        //object.dataset.masking = "None";
 
                         object.dataset.type += " Harmful";
 
