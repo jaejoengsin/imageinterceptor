@@ -1,9 +1,18 @@
+# === Web & Framework ===
 fastapi==0.108.0
 uvicorn[standard]==0.25.0
-pydantic==2.5.3
 gunicorn==21.2.0
 python-multipart==0.0.6
-torch==2.1.0
-torchvision==0.16.0
+
+# === Data & Utils ===
+pydantic==2.5.3
 pillow==10.2.0
-numpy==1.26.3 
+numpy==1.26.3
+
+# === PyTorch (GPU 버전은 Dockerfile에서 설치됨) ===
+# Dockerfile에서 CUDA 12.1 버전으로 설치:
+# pip install torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu121
+# 
+# 이 파일에서는 torch/torchvision을 명시하지 않습니다 (중복 방지)
+# torch==2.1.0
+# torchvision==0.16.0

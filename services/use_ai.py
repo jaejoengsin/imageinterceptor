@@ -1,5 +1,4 @@
 """
-2025.09.13 수정 - infer.py 직접 호출 방식
 AI 모델 연결 모듈 
 ImageInterceptor_AI/Scripts/infer.py의 함수들을 직접 호출하여 사용합니다.
 """
@@ -38,9 +37,22 @@ LEVEL_THRESHOLDS = FILTER_LEVEL_THRESHOLDS
 
 
 class AIModelManager:
-    """infer.py를 직접 호출하는 AI 모델 관리자"""
+    """infer.py를 직접 호출하는 AI 모델 관리자 (상주 모델)"""
+    
+    _instance = None
+    _initialized = False
+
+    def __new__(cls, model_path: str | None = None):
+        """싱글턴 패턴으로 인스턴스 생성"""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
     def __init__(self, model_path: str | None = None):
+        # 이미 초기화된 경우 중복 초기화 방지
+        if self._initialized:
+            return
+            
         default_path = project_root / "ImageInterceptor_AI" / "runs" / "best.pt"
         self.model_path = Path(model_path) if model_path else default_path
         
@@ -48,34 +60,73 @@ class AIModelManager:
         import torch
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = None
-        self._init_model()
+        self.model_loaded = False
+        self._initialized = True
+        
+        # GPU 상태 상세 로깅
+        print(f"[AI] ==================== GPU 상태 ====================")
+        print(f"[AI] PyTorch 버전: {torch.__version__}")
+        print(f"[AI] CUDA 사용 가능: {torch.cuda.is_available()}")
+        if torch.cuda.is_available():
+            print(f"[AI] CUDA 버전: {torch.version.cuda}")
+            print(f"[AI] GPU 개수: {torch.cuda.device_count()}")
+            print(f"[AI] GPU 이름: {torch.cuda.get_device_name(0)}")
+            print(f"[AI] 디바이스: {self.device} ✓ GPU 가속 활성화")
+        else:
+            print(f"[AI] 디바이스: {self.device} (CPU 모드)")
+            print(f"[AI] GPU를 사용하려면 CUDA 버전 PyTorch 설치 필요")
+            print(f"[AI] 설치 명령어: pip install torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu118")
+        print(f"[AI] 모델 경로: {self.model_path}")
+        print(f"[AI] ===================================================")
+        print(f"[AI] AIModelManager 초기화 완료 (모델 미로드 상태)")
 
-    def _init_model(self) -> None:
-        """infer.py의 load_model 함수를 직접 호출"""
+    def load_model(self) -> bool:
+        """
+        상주 모델 로드 - FastAPI 시작 시 호출
+        Returns: 로드 성공 여부
+        """
+        if self.model_loaded and self.model is not None:
+            print(f"[AI] 모델이 이미 로드되어 있습니다.")
+            return True
+            
         try:
             if not self.model_path.exists():
                 print(f"[AI] 모델 파일이 없습니다: {self.model_path}")
-                return
+                return False
                 
             if load_model is None:
                 print(f"[AI] infer.py 모듈을 사용할 수 없습니다")
-                return
+                return False
                 
+            print(f"[AI] 상주 모델 로딩 시작...")
+            print(f"[AI] 모델 경로: {self.model_path}")
+            print(f"[AI] 디바이스: {self.device}")
+            
             # infer.py의 load_model 함수 직접 호출
             self.model = load_model(str(self.model_path), self.device)
-            print(f"[AI] 모델 로드 완료 (infer.py 사용): {self.model_path} | device={self.device}")
+            self.model_loaded = True
+            
+            print(f"[AI] 상주 모델 로드 완료! (infer.py 사용)")
+            print(f"[AI] 이제 모든 요청에서 이 모델을 재사용합니다.")
+            return True
             
         except Exception as e:
             print(f"[AI] 모델 로드 실패: {e}")
             self.model = None
+            self.model_loaded = False
+            return False
+    
+    def is_model_ready(self) -> bool:
+        """모델이 사용 가능한 상태인지 확인"""
+        return self.model_loaded and self.model is not None
 
     # -------------------------
     # 내부 추론
     # -------------------------
     def _predict_single(self, image_bytes: bytes, level: int = 2) -> Dict[str, Any]:
-        """infer.py의 infer_one 함수를 직접 호출"""
-        if self.model is None:
-            return {"error": True, "message": "AI 모델이 로드되지 않았습니다."}
+        """infer.py의 infer_one 함수를 직접 호출 (상주 모델 사용)"""
+        if not self.is_model_ready():
+            return {"error": True, "message": "상주 모델이 로드되지 않았습니다. 서버를 다시 시작해주세요."}
             
         if infer_one is None:
             return {"error": True, "message": "infer.py 모듈을 사용할 수 없습니다."}
@@ -162,10 +213,21 @@ class AIModelManager:
             return [{"error": True, "message": f"배치 처리 오류: {e}"} for _ in image_bytes_list]
 
 
-# 전역 인스턴스
+# 전역 인스턴스 (상주 모델 - 지연 로딩)
 ai_model = AIModelManager(
     model_path=os.getenv("MODEL_WEIGHTS")  # 미설정 시 기본 경로 사용
 )
+
+# FastAPI 시작 시 호출할 초기화 함수
+async def initialize_resident_model() -> bool:
+    """상주 모델 초기화 - FastAPI lifespan에서 호출"""
+    print(f"[AI] 상주 모델 초기화 시작...")
+    success = ai_model.load_model()
+    if success:
+        print(f"[AI] 상주 모델 준비 완료! 이제 빠른 추론이 가능합니다.")
+    else:
+        print(f"[AI] 상주 모델 로드 실패. 요청 시 오류가 발생할 수 있습니다.")
+    return success
 
 
 # 외부에서 사용하는 함수

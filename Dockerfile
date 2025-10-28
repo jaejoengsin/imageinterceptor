@@ -1,35 +1,54 @@
-# Google Cloud Run용 Dockerfile (멀티스테이지 빌드)
-FROM python:3.11-slim as builder
+# Google Cloud Run GPU용 Dockerfile
+# NVIDIA CUDA 12.1 베이스 이미지 (Ubuntu 22.04)
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
 
-# 빌드 도구 설치
+# 비대화형 모드 설정 (apt-get 설치 시 프롬프트 방지)
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Python 3.11 및 필수 패키지 설치
 RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-dev \
+    python3-pip \
     gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Python 종속성 파일 복사 및 설치
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# python3.11을 기본 python으로 설정
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
 
-# 프로덕션 스테이지
-FROM python:3.11-slim
-
-# 보안을 위한 비-루트 사용자 생성
-RUN groupadd -r appuser && useradd -r -g appuser -m appuser
+# pip 업그레이드
+RUN python -m pip install --upgrade pip
 
 # 작업 디렉토리 설정
 WORKDIR /app
 
-# 빌드 스테이지에서 패키지 복사
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+# requirements.txt 먼저 복사 (Docker 캐시 최적화)
+COPY requirements.txt .
+
+# PyTorch GPU 버전 설치 (CUDA 12.1)
+RUN pip install --no-cache-dir torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu121
+
+# 나머지 의존성 설치
+RUN pip install --no-cache-dir -r requirements.txt
 
 # 애플리케이션 코드 복사
 COPY . .
 
+# 보안을 위한 비-루트 사용자 생성
+RUN groupadd -r appuser && useradd -r -g appuser -m appuser
+
 # 파일 소유권 변경 및 PyTorch 캐시 디렉토리 권한 설정
 RUN chown -R appuser:appuser /app && \
     mkdir -p /home/appuser/.cache && \
-    chown -R appuser:appuser /home/appuser/.cache
+    chown -R appuser:appuser /home/appuser/.cache && \
+    mkdir -p /home/appuser/.torch && \
+    chown -R appuser:appuser /home/appuser/.torch
+
+# GPU 사용을 위한 환경변수 설정
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
 # 비-루트 사용자로 전환
 USER appuser

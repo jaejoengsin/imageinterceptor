@@ -11,8 +11,22 @@ from routers import analyze  # analyze.router 를 사용
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """애플리케이션 생명주기 관리"""
+    """애플리케이션 생명주기 관리 (상주 모델 포함)"""
     print("Image Interceptor API 시작")
+    
+    # 상주 모델 초기화
+    try:
+        from services.use_ai import initialize_resident_model
+        print("상주 모델 로딩 중...")
+        model_success = await initialize_resident_model()
+        if model_success:
+            print("상주 모델 로드 성공 - API 준비 완료!")
+        else:
+            print("상주 모델 로드 실패 - API는 시작되지만 AI 기능에 제한이 있을 수 있습니다.")
+    except Exception as e:
+        print(f"상주 모델 초기화 중 오류: {e}")
+        print("API는 시작되지만 AI 기능이 제한될 수 있습니다.")
+    
     try:
         yield
     finally:
@@ -25,18 +39,27 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS 설정 (확장프로그램에서 접근 허용)
+# CORS 설정 (Chrome Extension ID 기반 보안)
+# Chrome Extension ID: afgkfobbhjmlkdmphhblfjklfkldgilf
+ALLOWED_ORIGINS = [
+    "chrome-extension://afgkfobbhjmlkdmphhblfjklfkldgilf",  # Image Interceptor Extension
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],              # 프로덕션에선 도메인 제한 권장
-    allow_credentials=False,
-    allow_methods=["*"],              # 프리플라이트(OPTIONS) 포함
-    allow_headers=["*"],              # 필요시 좁히기
+    allow_origins=ALLOWED_ORIGINS,    # Chrome Extension ID로 제한
+    allow_credentials=False,          # 쿠키/인증 정보 비활성화
+    allow_methods=["GET", "POST"],    # 필요한 메서드만 허용
+    allow_headers=["*"],              # 헤더는 허용 (Content-Type 등 필요)
+    max_age=3600,                     # Preflight 요청 캐시 (1시간)
 )
+
+print(f"✓ [CORS] 허용된 origins: {ALLOWED_ORIGINS}")
 
 # 이미지 분석 API 라우터 등록
 # analyze.py 에 이미 prefix="/analyze" 가 있으므로 여기서는 prefix를 다시 붙이지 않습니다.
 app.include_router(analyze.router)
+
 
 # 루트 엔드포인트
 @app.get("/")

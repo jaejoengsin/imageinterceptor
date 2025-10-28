@@ -78,3 +78,4 @@ test_*
 # Development files
 .dev/
 development/
+instructions/

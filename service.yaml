@@ -1,21 +1,26 @@
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: image-interceptor-new1
+  name: image-interceptor-gpu
   annotations:
     run.googleapis.com/ingress: all
     run.googleapis.com/execution-environment: gen2
+    # GPU 사용 명시
+    run.googleapis.com/launch-stage: BETA
 spec:
   template:
     metadata:
       annotations:
-        autoscaling.knative.dev/maxScale: "10"
-        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "5"  # GPU는 비싸므로 최대 5개로 제한
+        autoscaling.knative.dev/minScale: "0"  # 비용 절감: 트래픽 없으면 0으로
         run.googleapis.com/execution-environment: gen2
         run.googleapis.com/cpu-throttling: "false"
         run.googleapis.com/startup-cpu-boost: "true"
+        # GPU 설정
+        run.googleapis.com/gpu-type: "nvidia-l4"  # L4 GPU (가장 경제적)
+        run.googleapis.com/gpu: "1"  # GPU 1개 사용
     spec:
-      containerConcurrency: 100
+      containerConcurrency: 1  # GPU 사용 시 동시 처리 제한
       timeoutSeconds: 300
       containers:
       - image: IMAGE_URL  # 배포 시 실제 이미지 URL로 교체
@@ -24,10 +29,15 @@ spec:
         env:
         - name: PORT
           value: "8080"
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: "all"
+        - name: NVIDIA_DRIVER_CAPABILITIES
+          value: "compute,utility"
         resources:
           limits:
-            cpu: "1"
-            memory: "1Gi"
+            cpu: "4"
+            memory: "16Gi"  # GPU 사용 시 메모리 증가
+            nvidia.com/gpu: "1"  # GPU 1개 할당
         startupProbe:
           httpGet:
             path: /analyze/health

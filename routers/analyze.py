@@ -213,9 +213,10 @@ async def health_check():
     return {
         "status": "healthy",
         "ai_model": {
-            "status": "loaded" if ai_model.model is not None else "not_loaded",
+            "status": "loaded" if ai_model.model_loaded else "not_loaded",
             "model_path": model_path_str,
             "model_exists": model_exists,
+            "model_loaded": ai_model.model_loaded,
             "level_thresholds": LEVEL_THRESHOLDS,  # {1:0.8, 2:0.6, 3:0.4}
             "default_level": 2,
         },
@@ -224,7 +225,7 @@ async def health_check():
             "GET  /analyze/health  (상태 확인)",
         ],
         "features": [
-            "AI 모델 기반 유해성 검사 (safe/harmful)",
+            "유해성 검사 (safe/harmful)",
             "비동기 배치 처리로 성능 최적화",
             "레벨별 임계값: 1(0.8) / 2(0.6) / 3(0.4)",
             "FormData 업로드(Blob) 지원",
